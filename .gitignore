@@ -1,0 +1,10 @@
+# Pickle SuStaIn (troppo grandi per git)
+output_sustain_als/pickle_files/
+output_sustain_c9/pickle_files/
+# Figure generate automaticamente
+output_sustain_als/fig_*.png
+# Jupyter checkpoints
+.ipynb_checkpoints/
+# Dati reali (mai su git — privacy pazienti)
+data/
+*.csv
