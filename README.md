@@ -94,7 +94,7 @@ L'ambiente Python richiede:
 pip install pySuStaIn numpy pandas matplotlib seaborn scipy scikit-learn
 ```
 
-Per la pipeline di preprocessing MATLAB sono necessari **MATLAB R2024+** con **SPM12 o SPM25**, il [template FDG-PET di Della Rosa et al.](https://github.com/PasqualeDellaRosa/Dementia-Specific-18F-FDG-PET-template) e il [toolbox MarsBaR](http://marsbar.sourceforge.net/) per l'estrazione delle ROI.
+Per la pipeline di preprocessing MATLAB sono necessari **MATLAB R2024+** con **SPM12 o SPM25** e il [template FDG-PET di Della Rosa et al.](https://github.com/PasqualeDellaRosa/Dementia-Specific-18F-FDG-PET-template).
 
 ---
 
