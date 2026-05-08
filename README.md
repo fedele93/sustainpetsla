@@ -67,7 +67,8 @@ Gli script MATLAB che implementano gli Step 1–5 sono documentati nella **Wiki*
 
 ```
 ├── Vesione_0_3_SuStaIn_ALS_FDG_template.ipynb   ← Notebook principale di analisi (Parte 2)
-└── README.md                                      ← Questo file
+├──.gitignore                                    ← Serve per non caricare/esporre su github i dati dei pazienti su cui avviene l'analisi
+└── README.md                                    ← Questo file
 ```
 
 La **Wiki** (scheda Wiki in alto) contiene:
