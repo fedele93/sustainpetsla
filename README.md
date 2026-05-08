@@ -110,5 +110,6 @@ Per la pipeline di preprocessing MATLAB sono necessari **MATLAB R2024+** con **S
 ## Stato del progetto
 
 Il progetto è in sviluppo attivo. La Parte 1 (preprocessing fino al modello normativo) è largamente implementata. Il notebook principale gira dall'inizio alla fine sui dati sintetici. L'estrazione delle ROI (Step 7) e l'applicazione della pipeline z-score alla coorte SLA reale sono in corso.
+Qui il kamban del [progetto](https://github.com/users/fedele93/projects/1), con gli elementi principali da sviluppare.
 
 *Progetto di tesi — Università di Torino/Bari*
