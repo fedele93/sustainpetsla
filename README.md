@@ -103,6 +103,8 @@ Per la pipeline di preprocessing MATLAB sono necessari **MATLAB R2024+** con **S
 
 - Young AL, et al. (2018). Uncovering the heterogeneity and temporal complexity of neurodegenerative diseases with Subtype and Stage Inference. *Nature Communications*, 9, 4273.
 - Della Rosa PA, et al. (2014). A standardized [18F]-FDG-PET template for spatial normalization in statistical parametric mapping of dementia. *Neuroinformatics*, 12(4), 575–593.
+- https://github.com/PasqualeDellaRosa/Dementia-Specific-18F-FDG-PET-template — Template FDG-PET (licenza MIT)
+- https://github.com/ucl-pond/pySuStaIn — Repository pySuStaIn (licenza MIT)
 
 
 ---
