@@ -62,7 +62,7 @@ I file DICOM di ciascun soggetto vengono convertiti in un unico volume NIfTI tri
 
 ### 2.1b Contesto e motivazione
 
-I dati FDG-PET dei pazienti ALS provengono sono archiviati nel formato **Analyze 7.5** (coppia di file `.img` + `.hdr`).A differenza dei DICOM ADNI, che richiedono una conversione esplicita in NIfTI, i file Analyze sono già volumetri tridimensionali ricostruiti pronti per l'elaborazione in SPM.
+I dati FDG-PET dei pazienti ALS sono archiviati nel formato **Analyze 7.5** (coppia di file `.img` + `.hdr`). A differenza dei DICOM ADNI, che richiedono una conversione esplicita in NIfTI, i file Analyze sono già volumi tridimensionali ricostruiti pronti per l'elaborazione in SPM.
 
 Questo non significa però che i file Analyze possano essere passati direttamente alla normalizzazione spaziale senza un'ispezione preliminare. L'Analyze 7.5 aveva una notoria limitazione nell'header: **non codifica informazioni sull'orientamento spaziale** (la matrice di rotazione e il verso degli assi è assente o ambiguo). In NIfTI questa informazione è esplicita nelle trasformazioni `sform`/`qform`. L'assenza dell'orientamento nell'Analyze significa che lo stesso file può essere interpretato con assi L→R oppure R→L a seconda del software, generando flip left/right invisibili all'ispezione visiva ma che invalidano l'analisi di lateralizzazione.
 
@@ -161,7 +161,7 @@ Da questo punto in poi, i file NIfTI dei pazienti ALS seguono esattamente la ste
 
 ### Considerazioni sull'orientamento e il formato Analyze
 
-Vale la pena spendere qualche parola sull'architettura del formato per evitare possibili errori. Il formato Analyze 7.5 codifica i dati in un file binario `.img` e le informazioni geometriche in un file `.hdr` di 348 byte. Il campo `pixdim` dell'header contiene le dimensioni dei voxel, ma il campo relativo all'orientamento (`hist.orient`) ha una semantica volutamente lasciata ambigua dalla specifica originale, tant'è che SPM nelle versioni storiche lo ignorava e assumeva sempre un orientamento implicito basato sulla convenzione del radiologist (R→L per l'asse x). NIfTI 1.0 (2004) ha risolto questo problema introducendo le matrici `sform` e `qform`, che codificano l'orientamento in modo non ambiguo.
+Vale la pena spendere qualche parola sull'architettura del formato per evitare possibili errori. Il formato Analyze 7.5 codifica i dati in un file binario `.img` e le informazioni geometriche in un file `.hdr` di 348 byte. Il campo `pixdim` dell'header contiene le dimensioni dei voxel, ma il campo relativo all'orientamento (`hist.orient`) ha una semantica volutamente lasciata ambigua dalla specifica originale, tant'è che SPM nelle versioni storiche lo ignorava e assumeva sempre un orientamento implicito basato sulla convenzione radiologica (R→L per l'asse x). NIfTI 1.0 (2004) ha risolto questo problema introducendo le matrici `sform` e `qform`, che codificano l'orientamento in modo non ambiguo.
 
 Quando nibabel legge un file Analyze e lo converte in NIfTI, costruisce la matrice affine a partire dai `pixdim` e da una convenzione di default: l'orientamento corretto dell'immagine risultante dipende quindi da come il software di acquisizione/ricostruzione del laboratorio di medicina nucleare scriveva il campo `pixdim[0]` (il segno della prima dimensione voxel, che alcune implementazioni usano per codificare la lateralità). È per questo che la verifica visiva del flip post-conversione (Passo B) è un passaggio non opzionale.
 
@@ -184,7 +184,7 @@ Le immagini vengono pertanto normalizzate al **template FDG-PET di Della Rosa et
 - Modalità *Preserve Concentrations*; interpolazione trilineare
 - Dimensioni delle immagini normalizzate: voxel isotropici 2×2×2 mm³; FOV: x=−78:78, y=−112:76, z=−70:85 mm
 
-> Il template di Della Rosa et al. è stato costruito mediando 100 immagini FDG-PET normalizzate in spazio MNI, provenienti da soggetti sani e da pazienti con diverse forme di demenza, e validato su coorti indipendenti di AD, MCI, bvFTD e DLB. Viene qui impiegato esclusivamente come riferimento per la registrazione spaziale, non come riferimento metabolico; il riferimento metabolico è fornito dai controlli ADNI (oppure ai controlli della società italiana di medicina nucleare).
+> Il template di Della Rosa et al. è stato costruito mediando 100 immagini FDG-PET normalizzate in spazio MNI, provenienti da soggetti sani e da pazienti con diverse forme di demenza, e validato su coorti indipendenti di AD, MCI, bvFTD e DLB. Viene qui impiegato esclusivamente come riferimento per la registrazione spaziale, non come riferimento metabolico; il riferimento metabolico è fornito dai controlli ADNI (oppure dai controlli della società italiana di medicina nucleare).
 
 Al termine della normalizzazione, ogni immagine viene ispezionata visivamente per verificare la convergenza della registrazione ed escludere immagini con field of view parziale o normalizzazione fallita.
 
@@ -204,17 +204,20 @@ Lo smoothing è applicato dopo la normalizzazione spaziale — non prima — in 
 
 Per ogni immagine smoothata, ogni voxel viene diviso per la **media dell'intero cervello** (*whole brain mean*, WBM) del soggetto corrispondente. La WBM viene calcolata sui voxel intra-cerebrali, definiti come quelli con intensità superiore a zero dopo la normalizzazione spaziale.
 
-La normalizzazione in intensità standardizza la magnitudine dei valori tra soggetti, correggendo per la variabilità nella quantità di radioattività iniettata, nei fattori di scala specifici del centro di acquisizione e nelle differenze di unità di misura tra scanner (conteggi grezzi vs. SUV vs. Bq/ml- [*che credo sia relativo al formato del file nella versione grezza; quest'ultima considerazione non vale se utilizzo ADNI solo acquisiti in DICOM o solo i controlli ADNI*]).
+La normalizzazione in intensità standardizza la magnitudine dei valori tra soggetti, correggendo per la variabilità nella quantità di radioattività iniettata, nei fattori di scala specifici del centro di acquisizione. ~~e nelle differenze di unità di misura tra scanner (conteggi grezzi vs. SUV vs. Bq/ml- [*che credo sia relativo al formato del file nella versione grezza; quest'ultima considerazione non vale se utilizzo ADNI solo acquisiti in DICOM o solo i controlli ADNI*]).~~
 
 La scelta del whole brain mean come reference region è preferita rispetto al cervelletto o al ponte perché in ALS il cervelletto può essere coinvolto nella patologia — vedi ad esempio le forme C9orf72 (Tan et al., 2022). L'uso di una reference region potenzialmente patologica introdurrebbe un bias sistematico negli z-score delle regioni coinvolte.
 
 ---
+## Step (da inserire) Armonizzazione con ComBat
+
+> qui andrà inserita l'armonizzazione con ComBat fra i controlli ADNI/controlli società di medicina nucleare e le pet SLA.
 
 ## Step 5 — Modello Normativo Voxel-Wise
 
 ### Fase 5.1 — Stima del modello
 
-Per ogni voxel $j$, viene stimato un modello di regressione lineare OLS (minimi quadrati ordinari) sui 365 controlli ADNI (*o meno nel caso considerassi solo ADNI acquisiti in DICOM o i controlli  della società italiana di medicina nucleare*):
+Per ogni voxel $j$, viene stimato un modello di regressione lineare OLS (minimi quadrati ordinari) sui 231 controlli ADNI (*o il numero dei controlli  della società italiana di medicina nucleare*):
 
 $$\text{uptake}_j \sim \beta_0 + \beta_1 \cdot \text{age}_z + \beta_2 \cdot \text{sex}_c$$ dove $$\text{age}_z$$  è l'età del soggetto alla data di acquisizione della scansione PET, centrata e standardizzata sulla media e deviazione standard del campione di controllo
 
