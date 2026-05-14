@@ -33,10 +33,14 @@ I soggetti di controllo sono scaricati dall'Alzheimer's Disease Neuroimaging Ini
 - **Stato cognitivo**: cognitivamente normale (CN) alla valutazione baseline
 - **Formato immagine**: *Co-registered, Averaged* — il livello di preprocessing ADNI che include co-registrazione e media dei frame temporali, senza smoothing aggiuntivo. Scaricato in formato DICOM multi-slice.
 - **Scansioni multiple**: in presenza di scansioni multiple per lo stesso soggetto, è stata selezionata la scansione con la data di acquisizione più antica (baseline), identificata tramite l'Image Data ID fornito dal portale ADNI.
-- **Range di età**: 56–94 anni
-- **N**: 365 soggetti dopo applicazione dei criteri 
+- ~~**Range di età**: 56–94 anni~~
+- ~~**N**: 365 soggetti dopo applicazione dei criteri~~ 
 
-Le immagini ADNI in formato *Co-registered, Averaged* provengono da scanner PET di modelli e produttori diversi e, a seconda del sito di acquisizione, possono essere in unità diverse: conteggi grezzi (scanner con output in conteggi fotone, tipicamente DICOM), oppure unità calibrate SUV o Bq/ml (scanner con output in formato ECAT o HRRT). Questa eterogeneità di scala viene corretta dalla normalizzazione in intensità (Step 4), che riporta tutti i volumi alla stessa media unitaria.
+> ~~Le immagini ADNI in formato *Co-registered, Averaged* provengono da scanner PET di modelli e produttori diversi e, a seconda del sito di acquisizione, possono essere in unità diverse: conteggi grezzi (scanner con output in conteggi fotone, tipicamente DICOM), oppure unità calibrate SUV o Bq/ml (scanner con output in formato ECAT o HRRT). Questa eterogeneità di scala viene corretta dalla normalizzazione in intensità (Step 4), che riporta tutti i volumi alla stessa media unitaria.~~
+
+Ho deciso di escludere i file provenienti da acquisizione ECAT o HRRT. Inoltre ho escluso dei pazienti che nei demografic avevano dei mmse < 27. Per cui: 
+- **Range di età**: 56-94 anni
+- **N**: 
 
 > **Nota — varianza da scanner**: le immagini ADNI provengono da scanner PET di modelli e produttori diversi. Differenze nella risoluzione spaziale, nella PSF e nei protocolli di ricostruzione costituiscono una potenziale fonte di varianza non biologica. Non è stata applicata una correzione scanner-specifica esplicita (es. ComBat o stratificazione per scanner nel modello normativo). Questo aspetto è discusso come limitazione.
 
