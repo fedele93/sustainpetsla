@@ -38,15 +38,15 @@ I soggetti di controllo sono scaricati dall'Alzheimer's Disease Neuroimaging Ini
 
 > ~~Le immagini ADNI in formato *Co-registered, Averaged* provengono da scanner PET di modelli e produttori diversi e, a seconda del sito di acquisizione, possono essere in unità diverse: conteggi grezzi (scanner con output in conteggi fotone, tipicamente DICOM), oppure unità calibrate SUV o Bq/ml (scanner con output in formato ECAT o HRRT). Questa eterogeneità di scala viene corretta dalla normalizzazione in intensità (Step 4), che riporta tutti i volumi alla stessa media unitaria.~~
 
-Ho deciso di escludere i file provenienti da acquisizione ECAT o HRRT. Inoltre ho escluso dei pazienti che nei demografic avevano dei mmse < 27. Per cui: 
+Vienne deciso di escludere i file provenienti da acquisizione ECAT o HRRT. Inoltre ho escluso dei pazienti che nei demografic avevano dei mmse < 27. Per cui: 
 - **Range di età**: 56-94 anni
-- **N**: 
+- **N**: 231
 
-> **Nota — varianza da scanner**: le immagini ADNI provengono da scanner PET di modelli e produttori diversi. Differenze nella risoluzione spaziale, nella PSF e nei protocolli di ricostruzione costituiscono una potenziale fonte di varianza non biologica. Non è stata applicata una correzione scanner-specifica esplicita (es. ComBat o stratificazione per scanner nel modello normativo). Questo aspetto è discusso come limitazione.
+> **Nota — varianza da scanner**: le immagini ADNI provengono da scanner PET di modelli e produttori diversi. Differenze nella risoluzione spaziale, nella PSF e nei protocolli di ricostruzione costituiscono una potenziale fonte di varianza non biologica. Anche le PET ALS sono state acquisite con scanner diversi ripetto a quelli dell' ADNI . Per tale motivo verrà implementato ComBat. 
 
-> Se verranno utilizzate le pet dei controlli sani della società di medicina nucleare non dovrebbero porsi questi problemi.
+> **N.B.** Nei demografics ADNI, sebbene siano stati selezionati esclusivamente pazienti CN (cognitive normal), erano presenti mmse < 27, che ora sono stati eliminati. Il dato dell'mmse era però presente per solo per una piccola quota di pazienti, pertanto non è possibile escludere che le altre immagini provengano da pazienti con un deficit cognitivo lieve. La presenza di questi soggetti potrebbe comunque non essere un problema: la popolazione dei pazienti ALS potrebbe avere copatologia Alzheimer o inziali deficit cognitivi; l'utilizzo di questa popolazione di riferimento per l'assegnazione dei z score nelle PET ALS potrebbe essere utile per evidenziare specificatamente "la variazione in senso SLA). 
+>   Se si avranno a disposizione anchele pet dei controlli sani della società italiana di medicina nucleare si potrebbe ripetere la pipeline anche con quella popolazione di controllo per assegnarei z score.
 
-> Ho fatto anche l'analisi con controlli ADNI utilizzando esclusivamente le immagini acquisite originariamente in DICOM!
 ---
 
 ## Step 2 — Preprocessing e Normalizzazione Spaziale
