@@ -1,6 +1,5 @@
 # FDG PET in ALS: Pipeline Metodologica
 
-*Documento di lavoro — Bozza v1.9 (parte 1)*
 
 ---
 
@@ -1163,4 +1162,4 @@ fprintf('N=%d | df=%d | Voxel stimati=%d\n', N, df, sum(mask));
 
 ---
 
-*Versione 1.8 — Parte 1*
+
