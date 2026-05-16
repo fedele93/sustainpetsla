@@ -57,7 +57,7 @@ SuStaIn → sottotipi + stadi
 4. Della Rosa et al. (2014). A standardized [18F]-FDG-PET template for spatial normalization in statistical parametric mapping of dementia. *Neuroinformatics*, 12:575–593.
 5. Rolls ET et al. (2020). Automated anatomical labelling atlas 3. *NeuroImage*, 206:116189.
 6. Johnson WE et al. (2007). Adjusting batch effects in microarray expression data using empirical Bayes methods. *Biostatistics*, 8:118–127.
-7. Fortin JP et al. (2018). Harmonization of multi-site diffusion tensor imaging data. *NeuroImage*, 161:149–170.
+7. Fortin, Jean-Philippe, Drew Parker, Birkan Tunç, et al. «Harmonization of Multi-Site Diffusion Tensor Imaging Data». NeuroImage 161 (novembre 2017): 149–70. https://doi.org/10.1016/j.neuroimage.2017.08.047.
 8. Pomponio R et al. (2020). Harmonization of large MRI datasets for the analysis of brain imaging patterns throughout the lifespan. *NeuroImage*, 208:116450.
 9. Aksman LM et al. (2021). pySuStaIn: A Python Implementation of the Subtype and Stage Inference Algorithm. *SoftwareX*, 16:100811.
 10. https://github.com/PasqualeDellaRosa/Dementia-Specific-18F-FDG-PET-template
