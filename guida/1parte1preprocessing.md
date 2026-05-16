@@ -53,7 +53,7 @@ Sono stati esclusi i file provenienti da acquisizione ECAT o HRRT, e i soggetti 
 
 Le immagini ADNI nel formato *Co-registered, Averaged* sono distribuite come serie DICOM multi-slice (tipicamente 47 file `.dcm` per soggetto). La conversione utilizza il modulo SPM `DICOM Import` con le seguenti impostazioni: output in formato NIfTI-1 `.nii` (non `.nii.gz`); struttura directory piatta (`root = 'flat'`); nessuna rotazione dell'orientamento durante l'import.
 
-**Nota sul formato Analyze per i pazienti ALS**: i file provenienti da scanner di medicina nucleare italiani possono essere in formato Analyze 7.5 (coppia `.hdr`/`.img`). La conversione avviene tramite nibabel in Python (non tramite SPM DICOM Import). Dopo la conversione va eseguita una verifica visiva per escludere flip dell'asse x, che può verificarsi a causa dell'ambiguità nel campo `pixdim[0]` del formato Analyze.
+**Nota sul formato Analyze per i pazienti ALS**: italiani possono essere in formato Analyze 7.5 (coppia `.hdr`/`.img`). La conversione avviene tramite nibabel in Python (non tramite SPM DICOM Import). Dopo la conversione va eseguita una verifica visiva per escludere flip dell'asse x, che può verificarsi a causa dell'ambiguità nel campo `pixdim[0]` del formato Analyze.
 
 ### 2.2 — Correzione dell'origine dell'header
 
