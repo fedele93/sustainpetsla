@@ -9,7 +9,7 @@ Pipeline metodologica per l'applicazione dell'algoritmo SuStaIn (*Subtype and St
 La pipeline implementa un approccio a due stadi:
 
 1. **SuStaIn** sul dataset ALS completo e sui sottogruppi genetici (C9orf72, SOD1) per identificare pattern di progressione metabolica distinti.
-2. **EBM** (*Event-Based Model*, `kde_ebm`) su coorti geneticamente omogenee per costruire modelli di staging applicabili a soggetti presintomatici nei trial clinici.
+2. **EBM** (*Event-Based Model*, `kde_ebm`) su coorti geneticamente omogenee per costruire modelli di staging applicabili a soggetti presintomatici nei trial clinici. (non implementato nel nootebook attualmente)
 
 ---
 
