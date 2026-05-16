@@ -795,7 +795,7 @@ della Parte 2 come `data` per l'istanziazione di `pySuStaIn.ZscoreSustain`.
 
 ---
 
-**§5 — Metodologia dell'Estrazione ROI**
+**§8 — Metodologia dell'Estrazione ROI**
 
 ## 8.1 Razionale della riduzione dimensionale
 
