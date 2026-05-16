@@ -18,10 +18,10 @@ La pipeline implementa un approccio a due stadi:
 | Gruppo | N | Fonte | Ruolo |
 |--------|---|-------|-------|
 | Controlli CN | 231 | ADNI (*Co-registered, Averaged*) | Popolazione normativa |
-| Pazienti ALS | in corso | Centri italiani di neurologia | Target dell'analisi |
+| Pazienti ALS | 800-1000| Torino IRMET | Target dell'analisi |
 | — di cui C9orf72 | ~70 | — | Analisi isolata (Cmax = 3) |
-| — di cui SOD1 | ~20 | — | Controllo biologico positivo |
-
+| — di cui SOD1* | ~20 | — | Controllo biologico positivo | 
+*in discussione (verrà provato nel e fuori dal modello)
 ---
 
 ## Struttura della pipeline
@@ -33,7 +33,7 @@ DICOM (ADNI CN + pazienti ALS)
 i*_w.nii  [uptake FDG intensità-normalizzato, spazio MNI 2mm]
     │
     ▼  Step 5  (Python / nibabel)
-U_ctrl, U_ALS  [matrici ROI uptake — atlante AAL3, 24 regioni]
+U_ctrl, U_ALS  [matrici ROI uptake — atlante AAL3, 24 regioni (numeroda confermare)]
     │
     ▼  Step 6  (neuroCombat)
 Ũ_ctrl, Ũ_ALS  [matrici armonizzate inter-scanner]
@@ -48,7 +48,7 @@ Z  [N_ALS × 24, z-score invertiti — positivo = ipometabolismo]
 SuStaIn  →  sottotipi + stadi
     │
     ▼
-EBM (kde_ebm)  →  staging mutation-specific
+EBM (kde_ebm)  →  staging mutation-specific // non ancora implementato nel nootebook
 ```
 
 **Percorso visivo secondario** (non alimenta SuStaIn): il modello normativo voxel-wise e le mappe z-score `z_*.nii` sono prodotti opzionalmente per visualizzazione in MRIcroGL e analisi SPM second-level. Descritti in [Appendice](guida/4appendicepart1.md).
@@ -85,9 +85,9 @@ nibabel
 numpy
 pandas
 scipy
-neuroCombat          # pip install neuroCombat
+neuroCombat          # pip install neuroCombat  // non ancora usato
 pySuStaIn            # https://github.com/ucl-pond/pySuStaIn
-kde_ebm
+kde_ebm            //non ancora implementato
 matplotlib
 scikit-learn
 ```
@@ -104,24 +104,22 @@ Ambiente consigliato: `conda activate sustain_tutorial_env`
 | Macchina | Ruolo | Accesso |
 |----------|-------|---------|
 | Fedora (laptop) | Sviluppo, preprocessing MATLAB | locale |
-| GEEKOM Ubuntu 24.04 (`geekfed`) | Calcoli SuStaIn pesanti | `ssh -L 8888:localhost:8888 fidel@geekfed` |
+| Ubuntu server | Calcoli SuStaIn pesanti | `ssh ` |
 
-Sincronizzazione file: `rsync` via Tailscale (`100.126.238.112`).  
-Sessioni lunghe: `tmux new -s sustain_als`.
 
 ---
 
 ## Stato del progetto
 
-- [x] Selezione e preprocessing controlli ADNI (Step 1–4)
-- [x] Modello normativo voxel-wise (percorso visivo — Appendice)
-- [x] Estrazione ROI da uptake intensità-normalizzato (Step 5)
+- [x] Selezione e preprocessing controlli ADNI // o controlli S.I. Medicina nuclere (Step 1–4)
+- [ ] Modello normativo voxel-wise (percorso visivo — Appendice)
+- [ ] Estrazione ROI da uptake intensità-normalizzato (Step 5)
 - [ ] Armonizzazione ComBat — in attesa dei dati scanner/sito ALS (Step 6)
 - [ ] Modello normativo ROI + z-score ROI (Step 7–8)
 - [ ] SuStaIn dataset completo (Analisi 2a)
 - [ ] SuStaIn C9orf72 isolato (Analisi 2b)
-- [ ] Analisi post-hoc e validazione SOD1
-- [ ] EBM mutation-specific
+- [ ] Analisi post-hoc e validazione SOD1  // da discuter
+- [ ] EBM mutation-specific  // non ancora implementato
 
 ---
 
