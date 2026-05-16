@@ -10,7 +10,8 @@
 
 La Parte 1 segue due percorsi paralleli con finalità distinte:
 
-- **Percorso quantitativo primario** (step 1→8): produce la matrice $\mathbf{Z} \in \mathbb{R}^{N_{\text{ALS}} \times R}$ di z-score ROI armonizzati, input diretto a SuStaIn.
+- **Percorso quantitativo primario** (step 1→8): produce la matrice 
+$\mathbf{Z} \in \mathbb{R}^{N_{\text{ALS}} \times R}$ di z-score ROI armonizzati, input diretto a SuStaIn.
 - **Percorso visivo secondario** (step V): produce le mappe z-score voxel-wise `z_*.nii` per visualizzazione su MRIcroGL e analisi esplorative SPM second-level. Non alimenta SuStaIn.
 
 | # | Step | Input → Output |
