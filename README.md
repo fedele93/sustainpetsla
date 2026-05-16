@@ -138,5 +138,5 @@ Sessioni lunghe: `tmux new -s sustain_als`.
 9. Aksman LM et al. (2021). pySuStaIn: A Python Implementation of the Subtype and Stage Inference Algorithm. *SoftwareX*, 16:100811.
 
 ---
-
-*Progetto di dottorato — lavoro in corso*
+ 
+*Progetto di tesi di specializzazione di neurologia*
