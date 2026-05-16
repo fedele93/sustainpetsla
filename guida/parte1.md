@@ -7,21 +7,33 @@
 
 La pipeline si articola in due parti principali.
 
-**Parte 1** è comune a tutto il dataset ALS e ai controlli ADNI: produce le mappe z-score voxel-wise e i valori ROI per ogni soggetto ALS.
+**Parte 1** è comune a tutto il dataset ALS e ai controlli ADNI: produce la
+matrice degli z-score ROI per ogni soggetto ALS, che costituisce l'input
+diretto a SuStaIn.
 
-**Parte 2** utilizza questi valori ROI come input per SuStaIn, con analisi sull'intero dataset ALS e su sottogruppi selezionati.
+**Parte 2** utilizza questa matrice come input per SuStaIn, con analisi
+sull'intero dataset ALS e su sottogruppi selezionati.
 
-| PARTE 1 — Preprocessing & Z-score |
-|---|
-| 1. Selezione controlli ADNI |
-| 2. Preprocessing e normalizzazione spaziale |
-| 3. Smoothing 10 mm FWHM |
-| 4. Intensity normalization (whole brain mean) |
-| 5a. Estrazione ROI preliminare — controlli ADNI + pazienti ALS |
-| 5b. Armonizzazione ComBat inter-scanner** |
-| 6. Modello normativo OLS (età + sesso) — sui valori ROI armonizzati |
-| 7. Calcolo z-score ROI — pazienti ALS vs. modello normativo |
+La Parte 1 segue due percorsi paralleli con finalità distinte:
 
+- **Percorso quantitativo primario** (step 1→8): produce la matrice
+  $\mathbf{Z} \in \mathbb{R}^{N_{\text{ALS}} \times R}$ di z-score ROI
+  armonizzati, input diretto a SuStaIn.
+- **Percorso visivo secondario** (step 1→4 + step V): produce le mappe
+  z-score voxel-wise `z_*.nii` per visualizzazione e analisi esplorative
+  SPM second-level. Non alimenta SuStaIn.
+
+| # | Step | Input → Output |
+|---|------|----------------|
+| 1 | Selezione controlli ADNI | — → lista soggetti CN baseline |
+| 2 | Preprocessing e normalizzazione spaziale | DICOM → `s*_w.nii` |
+| 3 | Smoothing 10 mm FWHM | `s*_w.nii` → `s*_w.nii` (smoothati) |
+| 4 | Intensity normalization (whole brain mean) | `s*_w.nii` → `i*_w.nii` |
+| 5 | Estrazione ROI (ctrl ADNI + pazienti ALS) | `i*_w.nii` tutti → $\mathbf{U}$ |
+| 6 | Armonizzazione ComBat inter-scanner | $\mathbf{U}$ → $\tilde{\mathbf{U}}$ |
+| 7 | Modello normativo ROI (OLS su ctrl armonizzati) | $\tilde{\mathbf{U}}_{\text{ctrl}}$ → $\hat{\boldsymbol{\beta}}$, $\hat{\boldsymbol{\sigma}}$ |
+| 8 | Z-score ROI (pazienti ALS vs. norma) | $\tilde{\mathbf{U}}_{\text{ALS}}$ + modello → $\mathbf{Z}$ → **SuStaIn** |
+| V | *(Opzionale)* Z-score voxel-wise per mappe visive | `i*_w.nii` ALS + modello voxel-wise → `z_*.nii` |
 
 
 ---
@@ -212,35 +224,63 @@ La normalizzazione in intensità standardizza la magnitudine dei valori tra sogg
 La scelta del whole brain mean come reference region è preferita rispetto al cervelletto o al ponte perché in ALS il cervelletto può essere coinvolto nella patologia — vedi ad esempio le forme C9orf72 (Tan et al., 2022). L'uso di una reference region potenzialmente patologica introdurrebbe un bias sistematico negli z-score delle regioni coinvolte.
 
 ---
-# Step 5 — Estrazione ROI Preliminare (Controlli + Pazienti ALS)
+## Step 5 — Estrazione dei Valori ROI (Controlli ADNI + Pazienti ALS)
 
-Prima di procedere al modello normativo, è necessario ridurre ciascun volume
-intensità-normalizzato (file `i*_w.nii`, prodotto dallo Step 4) a un vettore di
-valori scalari per regione anatomica. Questa operazione — descritta in dettaglio
-nel §7 per le sue implicazioni metodologiche — viene qui anticipata rispetto
-all'ordine narrativo della pipeline perché è **logicamente prerequisita**
-all'armonizzazione ComBat (Step 4c): ComBat opera su una matrice numerica di
-dimensioni ridotte (soggetti × ROI), non sui volumi voxel-wise.
+### 5.1 Razionale e posizionamento
 
-L'estrazione ROI viene applicata a **tutti** i soggetti — controlli ADNI e
-pazienti ALS — usando l'atlante AAL3 (`ROI_MNI_V7.nii`), con la procedura
-descritta nel §7. Si ottengono due matrici:
+L'estrazione ROI è la prima operazione del percorso quantitativo primario che
+segue all'intensity normalization. Essa riduce ciascun volume
+intensità-normalizzato (`i*_w.nii`) a un vettore di $R$ valori scalari,
+uno per regione anatomica di interesse, mediante l'atlante AAL3. Questa
+riduzione dimensionale è prerequisita all'armonizzazione ComBat (Step 6):
+ComBat opera su matrici numeriche compatte (soggetti × ROI), non su volumi
+voxel-wise.
 
-- $\mathbf{U}_{\text{ctrl}} \in \mathbb{R}^{N_{\text{ctrl}} \times R}$: valori
-  ROI dei controlli ADNI ($N_{\text{ctrl}} = 231$, $R =$ numero di ROI
-  selezionate)
-- $\mathbf{U}_{\text{ALS}} \in \mathbb{R}^{N_{\text{ALS}} \times R}$: valori ROI
-  dei pazienti ALS
+L'operazione viene applicata a **tutti** i soggetti — controlli ADNI e
+pazienti ALS — producendo due matrici di uptake FDG relativo
+(intensità-normalizzato):
 
-Le due matrici vengono concatenate verticalmente in un'unica matrice combinata
-$\mathbf{U} \in \mathbb{R}^{(N_{\text{ctrl}} + N_{\text{ALS}}) \times R}$, che
-costituisce l'input al ComBat.
+$$\mathbf{U}_{\text{ctrl}} \in \mathbb{R}^{N_{\text{ctrl}} \times R}, \qquad \mathbf{U}_{\text{ALS}} \in \mathbb{R}^{N_{\text{ALS}} \times R}$$
+
+con $N_{\text{ctrl}} = 231$ controlli ADNI e $R$ = numero di ROI selezionate
+(vedi §8 per il set completo). Le due matrici vengono concatenate in:
+
+$$\mathbf{U} = \begin{pmatrix} \mathbf{U}_{\text{ctrl}} \\ \mathbf{U}_{\text{ALS}} \end{pmatrix} \in \mathbb{R}^{(N_{\text{ctrl}} + N_{\text{ALS}}) \times R}$$
+
+che costituisce l'input al passo successivo (ComBat, Step 6).
+
+### 5.2 Procedura di estrazione
+
+L'estrazione segue la stessa procedura descritta in dettaglio nel §8
+(atlante AAL3, formalizzazione matematica, codice Python), con l'unica
+differenza che qui l'input è il **volume di uptake
+intensità-normalizzato** `i*_w.nii` — non le mappe z-score. Il valore ROI
+di ogni soggetto in ogni regione è la media dell'uptake relativo sui voxel
+dell'intersezione tra la maschera anatomica AAL3 e il FOV del soggetto.
+
+Per l'implementazione Python, fare riferimento al codice del §8.5,
+sostituendo `zmap_dir` (cartella delle mappe `z_*.nii`) con la cartella
+contenente i file `i*_w.nii`, e il pattern `z_*.nii` con `i*_w.nii`. Il
+nome della colonna di output è `uptake_<ROI>` invece di `z_<ROI>` per
+distinguere le due matrici.
+
+### 5.3 Output
+
+Due file CSV:
+
+- `roi_uptake_controls_adni.csv` — matrice $\mathbf{U}_{\text{ctrl}}$
+  ($N_{\text{ctrl}} \times R$), una riga per soggetto ADNI
+- `roi_uptake_patients_als.csv` — matrice $\mathbf{U}_{\text{ALS}}$
+  ($N_{\text{ALS}} \times R$), una riga per paziente ALS
+
+Entrambi i file includeranno le colonne `SubjectID`, `age`, `sex`,
+`scanner_id` (o `site`) necessarie per il passo ComBat.
 
 ---
 
-# Step 5b — Armonizzazione Inter-Scanner con ComBat
+# Step 6 — Armonizzazione Inter-Scanner con ComBat
 
-## 5b.1 Razionale
+## 6.1 Razionale
 
 Le immagini FDG-PET che alimentano questa pipeline provengono da due fonti
 eterogenee: i controlli ADNI acquisiti su scanner diversi distribuiti su scala
@@ -266,7 +306,7 @@ all'imaging cerebrale: rimuove l'effetto additivo e moltiplicativo del batch
 (scanner/sito) mentre preserva la variabilità biologica di interesse (età, sesso,
 differenza malattia–controllo).
 
-## 4b.2 Il modello ComBat
+## 6.2 Il modello ComBat
 
 ComBat è stato originalmente proposto da Johnson et al. (2007, *Biostatistics*)
 per l'armonizzazione di dati di microarray. La sua estensione all'imaging
@@ -305,7 +345,7 @@ $$\hat{y}_{ijk} = \frac{y_{ijk} - \hat{\alpha}_k - \mathbf{x}_j^{\top}\hat{\bold
 In parole: si rimuovono gli effetti additivi e moltiplicativi del batch, e si
 ricolloca il dato sulla scala dell'effetto biologico globale e individuale.
 
-## 5b.3 Covariabili da proteggere
+## 6.3 Covariabili da proteggere
 
 L'inclusione corretta delle covariabili biologiche nel modello ComBat è
 metodologicamente critica. Se la variabile `gruppo` (controllo *vs.* paziente
@@ -324,7 +364,7 @@ pertanto:
   variabile continua
 - `sex`: sesso biologico, trattato come variabile categorica (0 = F, 1 = M)
 
-## 5b.4 Definizione del batch
+## 6.4 Definizione del batch
 
 La variabile di batch identifica, per ogni soggetto, lo scanner (o il sito di
 acquisizione) su cui è stata acquisita la PET. Per i controlli ADNI, questa
@@ -335,7 +375,7 @@ di acquisizione. Qualora la granularità degli scanner ADNI risulti eccessiva
 instabile), è appropriato aggregare per modello di scanner (es. tutte le unità
 Siemens Biograph mMR dello stesso sito) o per sito di acquisizione.
 
-## 4c.5 Posizionamento nell'ordine della pipeline
+## 6.5 Posizionamento nell'ordine della pipeline
 
 La scelta di applicare ComBat **dopo** l'estrazione ROI — piuttosto che
 direttamente sui volumi voxel-wise — è dettata da considerazioni pratiche e
@@ -352,21 +392,20 @@ controllo di riferimento con coorti di pazienti acquisiti in centri diversi
 
 Di conseguenza, l'ordine logico della pipeline è:
 
-1. Estrazione ROI su controlli e pazienti → matrice $\mathbf{U}$ (Step 4b)
-2. Armonizzazione ComBat su $\mathbf{U}$ → matrice armonizzata $\tilde{\mathbf{U}}$ (Step 4c)
+1. Estrazione ROI su controlli e pazienti → matrice $\mathbf{U}$ (Step 5)
+2. Armonizzazione ComBat su $\mathbf{U}$ → matrice armonizzata $\tilde{\mathbf{U}}$ (Step 6)
 3. Separazione di $\tilde{\mathbf{U}}$ in controlli e pazienti
-4. Stima del modello normativo sui valori ROI dei controlli armonizzati (Step 5, adattato)
-5. Calcolo degli z-score ROI per i pazienti ALS rispetto al modello normativo armonizzato (Step 6, adattato)
+4. Stima del modello normativo sui valori ROI dei controlli armonizzati (Step 7)
+5. Calcolo degli z-score ROI per i pazienti ALS rispetto al modello normativo armonizzato (Step 8)
 
-**Nota sul rapporto con il modello normativo voxel-wise**: il documento descrive
-anche una versione voxel-wise del modello normativo e degli z-score (Step 5–6
-originali), utile per la visualizzazione di mappe z-score cerebrali complete.
-Quella pipeline rimane valida per le analisi esplorative visive e per le
-eventuali analisi second-level con SPM. La matrice ROI armonizzata $\tilde{\mathbf{U}}$
-è invece l'input diretto a SuStaIn, e rappresenta il percorso quantitativo
-primario.
+> **Nota sul percorso visivo**: il modello normativo voxel-wise e il
+  > calcolo degli z-score voxel-wise sono descritti nell'Appendice A
+  > (script `pipeline_step3_normative_model_v2.m` e relativo codice
+  > Python). Quel percorso non è armonizzato con ComBat e produce mappe
+  > ad uso esclusivamente visivo. La matrice ROI armonizzata
+  > $\tilde{\mathbf{U}}$ è l'unico input a SuStaIn.
 
-## 5b.6 Implementazione computazionale
+## 6.6 Implementazione computazionale
 
 L'armonizzazione è eseguita con la libreria Python `neuroCombat` (Fortin et al.,
 2018), installabile via `pip install neuroCombat`. Il codice opera sulla matrice
@@ -462,7 +501,7 @@ print(f'  Pazienti ALS: {roi_als_harm.shape}')
 > `eb=False` (OLS puro senza regolarizzazione Bayesiana), che è meno efficiente
 > ma non richiede assunzioni distributive sui parametri di batch.
 
-## 4c.7 Controllo qualità post-armonizzazione
+## 6.7 Controllo qualità post-armonizzazione
 
 Dopo l'armonizzazione è essenziale verificare che ComBat abbia rimosso l'effetto
 di scanner senza alterare la struttura biologica del dataset. Il controllo
@@ -507,161 +546,256 @@ for i, roi in enumerate(roi_labels):
 
     print(f"{roi:<30} {F_pre:>12.2f} {F_post:>13.2f} {F_grp:>13.2f}")
 ```
+## Step 7 — Modello Normativo ROI
 
+### 7.1 Razionale
 
-## Step 6 — Modello Normativo Voxel-Wise
+Il modello normativo descrive, per ogni regione anatomica di interesse $r$,
+il metabolismo FDG relativo atteso in un soggetto sano in funzione della sua
+età e del suo sesso. Stimato esclusivamente sui controlli ADNI armonizzati,
+esso fornisce il riferimento rispetto al quale calcolare la deviazione
+individuale dei pazienti ALS (Step 8).
 
-### Fase 6.1 — Stima del modello
+A differenza del modello normativo voxel-wise (Appendice A), che stima
+$\sim$400.000 equazioni OLS indipendenti su ciascun voxel, il modello
+normativo ROI stima $R$ equazioni OLS, una per regione. La ridotta
+dimensionalità lo rende computazionalmente trascurabile e statisticamente
+più stabile: con 231 controlli e $R \approx 24$ equazioni indipendenti, il
+rapporto soggetti/parametri è $\sim$77, ampiamente superiore alla soglia
+convenzionale di robustezza.
 
-Per ogni voxel $j$, viene stimato un modello di regressione lineare OLS (minimi quadrati ordinari) sui 231 controlli ADNI (*o il numero dei controlli  della società italiana di medicina nucleare*):
+### 7.2 Formulazione
 
-$$\text{uptake}_j \sim \beta_0 + \beta_1 \cdot \text{age}_z + \beta_2 \cdot \text{sex}_c$$ dove $$\text{age}_z$$  è l'età del soggetto alla data di acquisizione della scansione PET, centrata e standardizzata sulla media e deviazione standard del campione di controllo
+Per ogni ROI $r$, il modello OLS stimato sui $N_{\text{ctrl}}$ controlli
+armonizzati è:
 
- ( $$\mu_{\text{age}} = 75.1$$  anni,  $$\sigma_{\text{age}} = 6.4$$  anni); $$\text{sex}_c$$ è il sesso codificato come variabile binaria (M=1, F=0) e centrato sulla proporzione del campione (49.0% M).
+$$\tilde{u}_{ir} \sim \beta_{0r} + \beta_{1r} \cdot \text{age}_{z,i} + \beta_{2r} \cdot \text{sex}_{c,i} + \varepsilon_{ir}$$
 
-Il sesso è incluso come covariata per controllare le differenze di metabolismo cerebrale tra uomini e donne che possono influenzare il modello normativo indipendentemente dall'età.
+dove $\tilde{u}_{ir}$ è il valore di uptake armonizzato del controllo $i$
+nella ROI $r$; $\text{age}_{z,i}$ è l'età standardizzata sulla media e
+deviazione standard del campione di controllo ($\mu_{\text{age}}$,
+$\sigma_{\text{age}}$); $\text{sex}_{c,i}$ è il sesso centrato sulla
+proporzione del campione ($\mu_{\text{sex}}$); $\varepsilon_{ir}$ è il
+residuo, assunto $\mathcal{N}(0, \sigma_r^2)$.
 
-Per ogni voxel vengono stimati e salvati:
-- $\hat{\beta}_{0j}$: intercetta (metabolismo predetto alla media di età e sesso)
-- $\hat{\beta}_{1j}$: coefficiente dell'età standardizzata
-- $\hat{\beta}_{2j}$: coefficiente del sesso centrato
-- $\hat{\sigma}_j$: deviazione standard dei residui ($df = 362$)
+Per ogni ROI $r$ vengono stimati e salvati:
+- $\hat{\beta}_{0r}$: uptake relativo atteso alla media di età e sesso
+- $\hat{\beta}_{1r}$: effetto dell'età standardizzata
+- $\hat{\beta}_{2r}$: effetto del sesso centrato
+- $\hat{\sigma}_r$: deviazione standard dei residui ($df = N_{\text{ctrl}} - 3$)
 
-La stima è eseguita in forma vettorizzata sull'intera matrice voxel × soggetti in un'unica operazione matriciale, previa applicazione di una maschera cerebrale (voxel con media > 0.1 nel campione di controllo; 403.117 voxel su 585.390 totali, 68.9%).
-
-### Fase 6.2 — Output del modello
-
-Il modello normativo produce tre file NIfTI:
-
-- `normative_beta.nii` — volume 4D con i tre coefficienti β₀, β₁, β₂
-- `normative_sigma.nii` — mappa della deviazione standard dei residui
-- `normative_mean.nii` — mappa del metabolismo predetto alla media di età e sesso (β₀)
-
-Un file `normative_params.mat` contiene i parametri di standardizzazione ($\mu_{\text{age}}$, $\sigma_{\text{age}}$, $\mu_{\text{sex}}$) necessari per applicare il modello ai pazienti ALS.
-**(sono arrivato qui!!)**
-
----
-
-## Step 7 — Calcolo degli Z-Score Individuali 
-
-### 7.1 Principio generale e razionale
-
-L'obiettivo di questo step è trasformare le immagini FDG-PET dei pazienti ALS da valori di uptake metabolico assoluto (o relativo, dopo la normalizzazione in intensità) in misure di *deviazione dalla norma* espressa in unità di deviazione standard. La logica è la stessa di qualsiasi z-score: si vuole rispondere alla domanda "di quante deviazioni standard il metabolismo di questo paziente in questo voxel si discosta da quello atteso per un soggetto sano della stessa età e dello stesso sesso?".
-
-Il confronto avviene rispetto al **modello normativo voxel-wise** stimato al passo precedente (Step 5) sull'intera popolazione di controllo ADNI. Il modello normativo formalizza, per ogni voxel $j$ dello spazio MNI, quale sia il metabolismo atteso in funzione dell'età standardizzata
-
-$\text{age}_{z}$ 
-
- e del sesso centrato
-
- $\text{sex}_{c}$ ,
-
- e quanto sia la variabilità fisiologica attorno a quella predizione (la deviazione standard dei residui $\hat{\sigma}_j$).
-
-Il passo è concettualmente separato dalla stima del modello normativo perché i parametri del modello vengono stimati *una volta sola* sui controlli, poi applicati a ciascun paziente ALS individualmente. Questa separazione è importante: garantisce che le mappe z-score dei pazienti siano indipendenti l'una dall'altra e non "contaminino" la distribuzione di riferimento.
-
-### 6.2 Formula del calcolo
-
-Per ogni paziente ALS $i$ e ogni voxel $j$ all'interno della maschera cerebrale, lo z-score è calcolato come:
-
-$$z_{ij} = \frac{x_{ij} - \left(\hat{\beta}_{0j} + \hat{\beta}_{1j} \cdot \text{age}_{z,i} + \hat{\beta}_{2j} \cdot \text{sex}_{c,i}\right)}{\hat{\sigma}_j}$$
-
-dove $x_{ij}$ è il valore di uptake FDG (normalizzato in intensità e smoothato) del paziente $i$ nel voxel $j$; il numeratore è la differenza tra il valore osservato e il valore *predetto* dal modello normativo alla specifica età e sesso del paziente; il denominatore è la deviazione standard dei residui stimata sul campione di controllo.
-
-I parametri di standardizzazione dell'età e del sesso ($\mu_{\text{age}}$, $\sigma_{\text{age}}$, $\mu_{\text{sex}}$ ) sono quelli salvati nel file `normative_params.mat` e sono applicati identici per tutti i pazienti:
-
-$$\text{age}_{z,i} = \frac{\text{age}_i - \mu_{\text{age}}}{\sigma_{\text{age}}} \qquad \text{sex}_{c,i} = \text{sex}_i - \mu_{\text{sex}}$$
-
-Questo è essenziale: usare i parametri del campione di controllo — e non ricalcolarli sui pazienti — assicura che lo z-score rifletta la distanza dalla norma sana, non dalla distribuzione patologica. Un paziente di 80 anni non viene confrontato con la media dei pazienti ALS, ma con la predizione del modello normativo per un ipotetico soggetto sano di 80 anni.
-
-### 7.3 Inversione del segno e convenzione SuStaIn
-
-L'FDG-PET è un marcatore di **metabolismo glucidico**: la patologia neurodegenerativa causa riduzione del metabolismo, quindi le regioni colpite presentano z-score *negativi* rispetto ai controlli sani. SuStaIn, nella sua implementazione a z-score (ZscoreSustain), è concepito per lavorare con valori positivi crescenti, dove valori più alti indicano maggiore patologia.
-
-Per adottare questa convenzione, si applica l'inversione del segno:
-
-$$z_{ij}^{\text{final}} = -z_{ij}$$
-
-Dopo questa trasformazione, uno z-score finale di +2 in una regione frontale significa che il paziente ha un metabolismo 2 deviazioni standard *sotto* la norma attesa per la sua età, ovvero un ipometabolismo frontale significativo. Lo z-score finale di 0 significa metabolismo perfettamente nella norma. L'inversione non altera la struttura matematica del modello; è una convenzione di segno necessaria per la coerenza con ZscoreSustain, dove le soglie di "evento" sono definite come $z = +1$, $z = +2$, $z = +3$ (crescenti con la patologia).
-
-> **Nota critica — implicazione per l'interpretazione**: i valori scalari che entrano in SuStaIn sono già con il segno invertito. Nelle analisi esplorative (distribuzione per ROI, heatmap), i valori positivi corrispondono all'ipometabolismo. È buona pratica indicare esplicitamente nelle didascalie delle figure se si utilizza la convenzione di segno originale (z negativo = ipometabolismo) o invertita (z positivo = ipometabolismo).
-
-### 7.4 Output e organizzazione dei file
-
-Per ogni paziente ALS $i$, viene prodotto un file NIfTI `z_<SUBJECT_ID>.nii` contenente la mappa z-score finale (con segno invertito) nello spazio MNI (voxel 2×2×2 mm³, dimensioni identiche alle immagini normalizzate dei controlli). I voxel fuori dalla maschera cerebrale vengono impostati a NaN (o 0) per chiarezza nella visualizzazione.
-
-L'insieme di tutti i file `z_*.nii` costituisce la *libreria di mappe z-score* che alimenta sia lo Step 7 (estrazione ROI scalare per SuStaIn) sia eventuali analisi voxel-wise esplorative di gruppo (SPM second-level, se future analisi le richiedessero).
-
-### 7.5 Implementazione computazionale
-
-Il calcolo è eseguito in Python (ambiente Conda, notebook Jupyter), sfruttando la vettorizzazione NumPy per operare su tutti i pazienti in parallelo. Di seguito la struttura logica del codice; la versione completa è inclusa in Appendice A.4.
+### 7.3 Implementazione
 
 ```python
 import numpy as np
-import nibabel as nib
 import pandas as pd
-from pathlib import Path
 
-# === Carica parametri normativo ===
-# (equivalente di normative_params.mat, salvato in formato .npz o .pkl)
-params = np.load('normative_params.npz', allow_pickle=True)
-age_mean   = float(params['age_mean'])
-age_std    = float(params['age_std'])
-sex_mean   = float(params['sex_mean'])
+# -----------------------------------------------------------------------
+# Carica la matrice dei controlli armonizzati (output Step 6)
+# -----------------------------------------------------------------------
+df_ctrl = pd.read_csv('roi_uptake_controls_adni_harmonized.csv')
 
-beta_img   = nib.load('normative_beta.nii')    # shape: (X, Y, Z, 3)
-sigma_img  = nib.load('normative_sigma.nii')   # shape: (X, Y, Z)
-beta_vol   = beta_img.get_fdata()              # β0, β1, β2 per ogni voxel
-sigma_vol  = sigma_img.get_fdata()
-affine     = beta_img.affine
+roi_labels = [c for c in df_ctrl.columns
+              if c not in ['SubjectID', 'age', 'sex', 'scanner_id', 'group']]
+R = len(roi_labels)
 
-# === Maschera cerebrale ===
-mask = sigma_vol > 0   # voxel stimati nel modello normativo
+# -----------------------------------------------------------------------
+# Standardizza le covariabili (parametri da salvare per Step 8)
+# -----------------------------------------------------------------------
+age_mean = df_ctrl['age'].mean()
+age_std  = df_ctrl['age'].std()
+sex_mean = df_ctrl['sex'].mean()   # proporzione M nel campione
 
-# === Dati pazienti ALS ===
-# df_als: DataFrame con colonne ['subject_id', 'age_at_scan', 'sex', 'filepath_nii']
-df_als = pd.read_csv('als_subjects.csv')
+age_z = (df_ctrl['age'].values - age_mean) / age_std
+sex_c = df_ctrl['sex'].values - sex_mean
 
-output_dir = Path('zmaps_als')
-output_dir.mkdir(exist_ok=True)
+# Matrice del design: (N_ctrl, 3) con intercetta, età_z, sesso_c
+X = np.column_stack([np.ones(len(df_ctrl)), age_z, sex_c])
 
-for _, row in df_als.iterrows():
-    # --- Standardizza covariabili del paziente ---
-    age_z_i  = (row['age_at_scan'] - age_mean) / age_std
-    sex_c_i  = (1.0 if row['sex'] == 'M' else 0.0) - sex_mean
+# -----------------------------------------------------------------------
+# Stima OLS per ogni ROI
+# -----------------------------------------------------------------------
+U_ctrl = df_ctrl[roi_labels].values   # shape: (N_ctrl, R)
+XtXinv = np.linalg.inv(X.T @ X)
 
-    # --- Carica immagine del paziente ---
-    pet_img  = nib.load(row['filepath_nii'])
-    x_vol    = pet_img.get_fdata()
+beta_roi  = np.zeros((R, 3))    # coefficienti: (R, 3)
+sigma_roi = np.zeros(R)         # SD residui: (R,)
 
-    # --- Calcolo predizione normativa voxel-wise ---
-    pred_vol = (beta_vol[..., 0]               # β0 (intercetta)
-              + beta_vol[..., 1] * age_z_i     # β1 * età_z
-              + beta_vol[..., 2] * sex_c_i)    # β2 * sesso_c
+for r in range(R):
+    y = U_ctrl[:, r]
+    beta_roi[r, :] = XtXinv @ X.T @ y
+    residui = y - X @ beta_roi[r, :]
+    sigma_roi[r] = np.sqrt(np.sum(residui**2) / (len(y) - 3))
 
-    # --- Z-score e inversione segno ---
-    z_vol = np.full(x_vol.shape, np.nan)
-    z_vol[mask] = (x_vol[mask] - pred_vol[mask]) / sigma_vol[mask]
-    z_vol[mask] = -z_vol[mask]   # inversione: positivo = ipometabolismo
+# -----------------------------------------------------------------------
+# Salva parametri del modello normativo ROI
+# -----------------------------------------------------------------------
+norm_params = {
+    'roi_labels': roi_labels,
+    'beta_roi':   beta_roi,       # shape: (R, 3) — [β0, β1_age, β2_sex]
+    'sigma_roi':  sigma_roi,      # shape: (R,)
+    'age_mean':   age_mean,
+    'age_std':    age_std,
+    'sex_mean':   sex_mean,
+    'N_ctrl':     len(df_ctrl),
+    'df':         len(df_ctrl) - 3
+}
+np.savez('normative_model_roi.npz', **norm_params)
 
-    # --- Salva NIfTI ---
-    out_path = output_dir / f"z_{row['subject_id']}.nii"
-    nib.save(nib.Nifti1Image(z_vol.astype(np.float32), affine), out_path)
-
-print(f"Z-score calcolati per {len(df_als)} pazienti.")
+print(f'Modello normativo ROI stimato su {len(df_ctrl)} controlli.')
+print(f'ROI: {R} | df: {len(df_ctrl) - 3}')
+print(f'\nParametri demografici:')
+print(f'  età: media={age_mean:.1f}, SD={age_std:.1f} anni')
+print(f'  sesso: {sex_mean*100:.1f}% M')
 ```
 
-> **Nota implementativa**: il ciclo `for` su ogni paziente è necessario perché le covariabili (età, sesso) differiscono tra pazienti; la predizione normativa è quindi calcolata su misura per ciascun soggetto. La parte computazionalmente onerosa — caricare `beta_vol` e `sigma_vol` — avviene una sola volta prima del ciclo.
+### 7.4 Output
 
-### 7.6 Controllo qualità
+Un file `normative_model_roi.npz` contenente:
+- `beta_roi` — matrice $(R \times 3)$ dei coefficienti OLS per ogni ROI
+- `sigma_roi` — vettore $(R)$ delle deviazioni standard dei residui
+- `age_mean`, `age_std`, `sex_mean` — parametri di standardizzazione da
+  applicare identici ai pazienti ALS allo Step 8
 
-Prima di procedere all'estrazione ROI (Step 7), è raccomandato eseguire un controllo qualità delle mappe z-score individuali. Per ogni paziente va verificata la distribuzione dei valori: in un soggetto senza grave patologia cerebrale diffusa, la distribuzione degli z-score cerebrali dovrebbe essere approssimativamente gaussiana centrata intorno a 0, con coda positiva nelle regioni ipometaboliche. Distribuzioni con media molto spostata (e.g. media > 1.5 su tutto il cervello) suggeriscono un problema di preprocessing (normalizzazione in intensità fallita, FOV incompleto, o normalizzazione spaziale divergente).
+## Step 8 — Calcolo degli Z-Score ROI (Pazienti ALS)
 
-Si raccomanda inoltre di sovrapporre visivamente alcune mappe z-score individuali sul template MNI, per verificare che le regioni di ipometabolismo atteso (corteccia motoria, aree frontali) siano anatomicamente plausibili e che non vi siano artefatti di registrazione (iperintensità nei lobuli parietali posteriori, pattern a virgola nei giri parahippocampali, che sono segni tipici di registrazione fallita).
+### 8.1 Principio
+
+Per ogni paziente ALS $i$ e ogni ROI $r$, lo z-score quantifica di quante
+deviazioni standard il metabolismo FDG relativo armonizzato si discosta
+da quello atteso per un soggetto sano della stessa età e dello stesso sesso,
+secondo il modello normativo stimato al passo precedente:
+
+$$z_{ir} = \frac{\tilde{u}_{ir} - \left(\hat{\beta}_{0r} + \hat{\beta}_{1r} \cdot \text{age}_{z,i} + \hat{\beta}_{2r} \cdot \text{sex}_{c,i}\right)}{\hat{\sigma}_r}$$
+
+I parametri di standardizzazione delle covariabili ($\mu_{\text{age}}$,
+$\sigma_{\text{age}}$, $\mu_{\text{sex}}$) sono quelli salvati nel file
+`normative_model_roi.npz` — gli stessi stimati sul campione di controllo,
+non ricalcolati sui pazienti.
+
+### 8.2 Inversione del segno e convenzione SuStaIn
+
+FDG-PET misura metabolismo glucidico: la patologia neurodegenerativa causa
+*ipometabolismo*, quindi le regioni colpite presentano z-score negativi
+rispetto ai controlli. ZscoreSuStaIn è costruito per valori positivi
+crescenti con la patologia. Si applica pertanto l'inversione del segno:
+
+$$z_{ir}^{\text{final}} = -z_{ir}$$
+
+Dopo questa trasformazione, $z^{\text{final}} > 0$ indica ipometabolismo
+(patologia), $z^{\text{final}} = 0$ indica metabolismo nella norma.
+I valori che entrano in SuStaIn sono espressi in questa convenzione; nelle
+didascalie delle figure va sempre specificato esplicitamente il segno
+utilizzato.
+
+### 8.3 Implementazione
+
+```python
+import numpy as np
+import pandas as pd
+
+# -----------------------------------------------------------------------
+# Carica parametri del modello normativo (output Step 7)
+# -----------------------------------------------------------------------
+params    = np.load('normative_model_roi.npz', allow_pickle=True)
+roi_labels = list(params['roi_labels'])
+beta_roi  = params['beta_roi']    # shape: (R, 3)
+sigma_roi = params['sigma_roi']   # shape: (R,)
+age_mean  = float(params['age_mean'])
+age_std   = float(params['age_std'])
+sex_mean  = float(params['sex_mean'])
+
+# -----------------------------------------------------------------------
+# Carica la matrice dei pazienti ALS armonizzati (output Step 6)
+# -----------------------------------------------------------------------
+df_als = pd.read_csv('roi_uptake_patients_als_harmonized.csv')
+
+U_als = df_als[roi_labels].values   # shape: (N_als, R)
+
+# -----------------------------------------------------------------------
+# Standardizza le covariabili dei pazienti con i parametri dei controlli
+# -----------------------------------------------------------------------
+age_z_als = (df_als['age'].values - age_mean) / age_std
+sex_c_als = df_als['sex'].values - sex_mean
+
+# -----------------------------------------------------------------------
+# Calcolo z-score per ogni paziente e ogni ROI
+# -----------------------------------------------------------------------
+N_als = len(df_als)
+R     = len(roi_labels)
+Z_als = np.full((N_als, R), np.nan)
+
+for i in range(N_als):
+    x_i    = np.array([1.0, age_z_als[i], sex_c_als[i]])
+    pred_i = beta_roi @ x_i          # shape: (R,) — predizione per paziente i
+    z_i    = (U_als[i, :] - pred_i) / sigma_roi
+    Z_als[i, :] = -z_i               # inversione: positivo = ipometabolismo
+
+# -----------------------------------------------------------------------
+# Verifica: media dei controlli (applicando il modello ai controlli
+# armonizzati) deve essere ≈ 0 per ogni ROI
+# -----------------------------------------------------------------------
+df_ctrl_harm = pd.read_csv('roi_uptake_controls_adni_harmonized.csv')
+U_ctrl = df_ctrl_harm[roi_labels].values
+age_z_ctrl = (df_ctrl_harm['age'].values - age_mean) / age_std
+sex_c_ctrl = df_ctrl_harm['sex'].values - sex_mean
+
+Z_ctrl = np.full((len(df_ctrl_harm), R), np.nan)
+for i in range(len(df_ctrl_harm)):
+    x_i = np.array([1.0, age_z_ctrl[i], sex_c_ctrl[i]])
+    pred_i = beta_roi @ x_i
+    Z_ctrl[i, :] = -(U_ctrl[i, :] - pred_i) / sigma_roi
+
+print('Verifica controlli (devono essere ≈ 0):')
+print('  media z controlli:', np.round(np.mean(Z_ctrl, axis=0), 3))
+print('  SD z controlli:', np.round(np.std(Z_ctrl, axis=0), 3))
+print()
+print('Verifica pazienti ALS (media deve essere > 0 = ipometabolismo):')
+print('  media z ALS:', np.round(np.mean(Z_als, axis=0), 3))
+
+# -----------------------------------------------------------------------
+# Salva la matrice z-score finale — input diretto a SuStaIn
+# -----------------------------------------------------------------------
+df_z = pd.DataFrame(Z_als, columns=roi_labels)
+df_z.insert(0, 'SubjectID', df_als['SubjectID'].values)
+df_z.to_csv('zscores_roi_als_final.csv', index=False)
+
+print(f'\nMatrice z-score salvata: {N_als} pazienti × {R} ROI')
+print('File: zscores_roi_als_final.csv  →  input per SuStaIn (Parte 2)')
+```
+
+### 8.4 Controllo qualità pre-SuStaIn
+
+Prima di procedere a SuStaIn è necessario verificare che la matrice
+z-score rispetti le assunzioni del modello. I controlli da eseguire sono:
+
+1. **Media z nei controlli ≈ 0 per ogni ROI**: confermato dall'ultimo
+   blocco del codice sopra. Deviazioni > 0.1 suggeriscono un problema nel
+   calcolo delle covariabili o nell'armonizzazione.
+
+2. **SD z nei controlli ≈ 1 per ogni ROI**: atteso per costruzione.
+   SD > 1.2 può indicare che ComBat ha rimosso meno varianza di batch del
+   previsto.
+
+3. **Media z nei pazienti ALS > 0 per le ROI di interesse**: conferma che
+   l'ipometabolismo ALS è correttamente codificato come valori positivi.
+   ROI con media negativa (o prossima a 0) nei pazienti ALS potrebbero non
+   portare informazione utile a SuStaIn e andrebbero riviste.
+
+4. **Assenza di NaN**: ROI con NaN per più del 10% dei soggetti (dovuti a
+   FOV parziale) vanno escluse o imputate prima di passare a SuStaIn, che
+   non gestisce valori mancanti.
+
+### 8.5 Output — Input a SuStaIn
+
+`zscores_roi_als_final.csv` — matrice $\mathbf{Z} \in \mathbb{R}^{N_{\text{ALS}} \times R}$
+con z-score ROI invertiti. Questa è la matrice che viene caricata all'inizio
+della Parte 2 come `data` per l'istanziazione di `pySuStaIn.ZscoreSustain`.
+
 
 ---
 
-# Step 8 — Estrazione dei Valori ROI (Atlante AAL3)
+**§5 — Metodologia dell'Estrazione ROI**
 
 ## 8.1 Razionale della riduzione dimensionale
 
@@ -1462,5 +1596,165 @@ fprintf('N=%d | df=%d | Voxel stimati=%d\n', N, df, sum(mask));
 ```
 
 ---
+### Appendice A.3b — Percorso Visivo: Modello Normativo e Z-Score Voxel-Wise
+
+## Step 6 — Modello Normativo Voxel-Wise
+
+> Questo percorso è alternativo al percorso quantitativo primario
+> (Step 5–8) e non alimenta SuStaIn. Produce le mappe z-score
+> voxel-wise `z_*.nii` da utilizzare per la visualizzazione su
+> MRIcroGL, per le figure di pubblicazione, e per eventuali analisi
+> esplorative SPM second-level. I parametri demografici di
+> standardizzazione e la popolazione di controllo sono identici a
+> quelli del percorso primario, ma l'armonizzazione ComBat **non**
+> viene applicata ai volumi voxel-wise.
+
+### Fase 6.1 — Stima del modello
+
+Per ogni voxel $j$, viene stimato un modello di regressione lineare OLS (minimi quadrati ordinari) sui 231 controlli ADNI (*o il numero dei controlli  della società italiana di medicina nucleare*):
+
+$$\text{uptake}_j \sim \beta_0 + \beta_1 \cdot \text{age}_z + \beta_2 \cdot \text{sex}_c$$ dove $$\text{age}_z$$  è l'età del soggetto alla data di acquisizione della scansione PET, centrata e standardizzata sulla media e deviazione standard del campione di controllo
+
+ ( $$\mu_{\text{age}} = 75.1$$  anni,  $$\sigma_{\text{age}} = 6.4$$  anni); $$\text{sex}_c$$ è il sesso codificato come variabile binaria (M=1, F=0) e centrato sulla proporzione del campione (49.0% M).
+
+Il sesso è incluso come covariata per controllare le differenze di metabolismo cerebrale tra uomini e donne che possono influenzare il modello normativo indipendentemente dall'età.
+
+Per ogni voxel vengono stimati e salvati:
+- $\hat{\beta}_{0j}$: intercetta (metabolismo predetto alla media di età e sesso)
+- $\hat{\beta}_{1j}$: coefficiente dell'età standardizzata
+- $\hat{\beta}_{2j}$: coefficiente del sesso centrato
+- $\hat{\sigma}_j$: deviazione standard dei residui ($df = 362$)
+
+La stima è eseguita in forma vettorizzata sull'intera matrice voxel × soggetti in un'unica operazione matriciale, previa applicazione di una maschera cerebrale (voxel con media > 0.1 nel campione di controllo; 403.117 voxel su 585.390 totali, 68.9%).
+
+### Fase 6.2 — Output del modello
+
+Il modello normativo produce tre file NIfTI:
+
+- `normative_beta.nii` — volume 4D con i tre coefficienti β₀, β₁, β₂
+- `normative_sigma.nii` — mappa della deviazione standard dei residui
+- `normative_mean.nii` — mappa del metabolismo predetto alla media di età e sesso (β₀)
+
+Un file `normative_params.mat` contiene i parametri di standardizzazione ($\mu_{\text{age}}$, $\sigma_{\text{age}}$, $\mu_{\text{sex}}$) necessari per applicare il modello ai pazienti ALS.
+**(sono arrivato qui!!)**
+
+---
+
+## Step 7 — Calcolo degli Z-Score Individuali 
+
+### 7.1 Principio generale e razionale
+
+L'obiettivo di questo step è trasformare le immagini FDG-PET dei pazienti ALS da valori di uptake metabolico assoluto (o relativo, dopo la normalizzazione in intensità) in misure di *deviazione dalla norma* espressa in unità di deviazione standard. La logica è la stessa di qualsiasi z-score: si vuole rispondere alla domanda "di quante deviazioni standard il metabolismo di questo paziente in questo voxel si discosta da quello atteso per un soggetto sano della stessa età e dello stesso sesso?".
+
+Il confronto avviene rispetto al **modello normativo voxel-wise** stimato al passo precedente (Step 5) sull'intera popolazione di controllo ADNI. Il modello normativo formalizza, per ogni voxel $j$ dello spazio MNI, quale sia il metabolismo atteso in funzione dell'età standardizzata
+
+$\text{age}_{z}$ 
+
+ e del sesso centrato
+
+ $\text{sex}_{c}$ ,
+
+ e quanto sia la variabilità fisiologica attorno a quella predizione (la deviazione standard dei residui $\hat{\sigma}_j$).
+
+Il passo è concettualmente separato dalla stima del modello normativo perché i parametri del modello vengono stimati *una volta sola* sui controlli, poi applicati a ciascun paziente ALS individualmente. Questa separazione è importante: garantisce che le mappe z-score dei pazienti siano indipendenti l'una dall'altra e non "contaminino" la distribuzione di riferimento.
+
+### 6.2 Formula del calcolo
+
+Per ogni paziente ALS $i$ e ogni voxel $j$ all'interno della maschera cerebrale, lo z-score è calcolato come:
+
+$$z_{ij} = \frac{x_{ij} - \left(\hat{\beta}_{0j} + \hat{\beta}_{1j} \cdot \text{age}_{z,i} + \hat{\beta}_{2j} \cdot \text{sex}_{c,i}\right)}{\hat{\sigma}_j}$$
+
+dove $x_{ij}$ è il valore di uptake FDG (normalizzato in intensità e smoothato) del paziente $i$ nel voxel $j$; il numeratore è la differenza tra il valore osservato e il valore *predetto* dal modello normativo alla specifica età e sesso del paziente; il denominatore è la deviazione standard dei residui stimata sul campione di controllo.
+
+I parametri di standardizzazione dell'età e del sesso ($\mu_{\text{age}}$, $\sigma_{\text{age}}$, $\mu_{\text{sex}}$ ) sono quelli salvati nel file `normative_params.mat` e sono applicati identici per tutti i pazienti:
+
+$$\text{age}_{z,i} = \frac{\text{age}_i - \mu_{\text{age}}}{\sigma_{\text{age}}} \qquad \text{sex}_{c,i} = \text{sex}_i - \mu_{\text{sex}}$$
+
+Questo è essenziale: usare i parametri del campione di controllo — e non ricalcolarli sui pazienti — assicura che lo z-score rifletta la distanza dalla norma sana, non dalla distribuzione patologica. Un paziente di 80 anni non viene confrontato con la media dei pazienti ALS, ma con la predizione del modello normativo per un ipotetico soggetto sano di 80 anni.
+
+### 7.3 Inversione del segno e convenzione SuStaIn
+
+L'FDG-PET è un marcatore di **metabolismo glucidico**: la patologia neurodegenerativa causa riduzione del metabolismo, quindi le regioni colpite presentano z-score *negativi* rispetto ai controlli sani. SuStaIn, nella sua implementazione a z-score (ZscoreSustain), è concepito per lavorare con valori positivi crescenti, dove valori più alti indicano maggiore patologia.
+
+Per adottare questa convenzione, si applica l'inversione del segno:
+
+$$z_{ij}^{\text{final}} = -z_{ij}$$
+
+Dopo questa trasformazione, uno z-score finale di +2 in una regione frontale significa che il paziente ha un metabolismo 2 deviazioni standard *sotto* la norma attesa per la sua età, ovvero un ipometabolismo frontale significativo. Lo z-score finale di 0 significa metabolismo perfettamente nella norma. L'inversione non altera la struttura matematica del modello; è una convenzione di segno necessaria per la coerenza con ZscoreSustain, dove le soglie di "evento" sono definite come $z = +1$, $z = +2$, $z = +3$ (crescenti con la patologia).
+
+> **Nota critica — implicazione per l'interpretazione**: i valori scalari che entrano in SuStaIn sono già con il segno invertito. Nelle analisi esplorative (distribuzione per ROI, heatmap), i valori positivi corrispondono all'ipometabolismo. È buona pratica indicare esplicitamente nelle didascalie delle figure se si utilizza la convenzione di segno originale (z negativo = ipometabolismo) o invertita (z positivo = ipometabolismo).
+
+### 7.4 Output e organizzazione dei file
+
+Per ogni paziente ALS $i$, viene prodotto un file NIfTI `z_<SUBJECT_ID>.nii` contenente la mappa z-score finale (con segno invertito) nello spazio MNI (voxel 2×2×2 mm³, dimensioni identiche alle immagini normalizzate dei controlli). I voxel fuori dalla maschera cerebrale vengono impostati a NaN (o 0) per chiarezza nella visualizzazione.
+
+L'insieme di tutti i file `z_*.nii` costituisce la *libreria di mappe z-score* che alimenta sia lo Step 7 (estrazione ROI scalare per SuStaIn) sia eventuali analisi voxel-wise esplorative di gruppo (SPM second-level, se future analisi le richiedessero).
+
+### 7.5 Implementazione computazionale
+
+Il calcolo è eseguito in Python (ambiente Conda, notebook Jupyter), sfruttando la vettorizzazione NumPy per operare su tutti i pazienti in parallelo. Di seguito la struttura logica del codice; la versione completa è inclusa in Appendice A.4.
+
+```python
+import numpy as np
+import nibabel as nib
+import pandas as pd
+from pathlib import Path
+
+# === Carica parametri normativo ===
+# (equivalente di normative_params.mat, salvato in formato .npz o .pkl)
+params = np.load('normative_params.npz', allow_pickle=True)
+age_mean   = float(params['age_mean'])
+age_std    = float(params['age_std'])
+sex_mean   = float(params['sex_mean'])
+
+beta_img   = nib.load('normative_beta.nii')    # shape: (X, Y, Z, 3)
+sigma_img  = nib.load('normative_sigma.nii')   # shape: (X, Y, Z)
+beta_vol   = beta_img.get_fdata()              # β0, β1, β2 per ogni voxel
+sigma_vol  = sigma_img.get_fdata()
+affine     = beta_img.affine
+
+# === Maschera cerebrale ===
+mask = sigma_vol > 0   # voxel stimati nel modello normativo
+
+# === Dati pazienti ALS ===
+# df_als: DataFrame con colonne ['subject_id', 'age_at_scan', 'sex', 'filepath_nii']
+df_als = pd.read_csv('als_subjects.csv')
+
+output_dir = Path('zmaps_als')
+output_dir.mkdir(exist_ok=True)
+
+for _, row in df_als.iterrows():
+    # --- Standardizza covariabili del paziente ---
+    age_z_i  = (row['age_at_scan'] - age_mean) / age_std
+    sex_c_i  = (1.0 if row['sex'] == 'M' else 0.0) - sex_mean
+
+    # --- Carica immagine del paziente ---
+    pet_img  = nib.load(row['filepath_nii'])
+    x_vol    = pet_img.get_fdata()
+
+    # --- Calcolo predizione normativa voxel-wise ---
+    pred_vol = (beta_vol[..., 0]               # β0 (intercetta)
+              + beta_vol[..., 1] * age_z_i     # β1 * età_z
+              + beta_vol[..., 2] * sex_c_i)    # β2 * sesso_c
+
+    # --- Z-score e inversione segno ---
+    z_vol = np.full(x_vol.shape, np.nan)
+    z_vol[mask] = (x_vol[mask] - pred_vol[mask]) / sigma_vol[mask]
+    z_vol[mask] = -z_vol[mask]   # inversione: positivo = ipometabolismo
+
+    # --- Salva NIfTI ---
+    out_path = output_dir / f"z_{row['subject_id']}.nii"
+    nib.save(nib.Nifti1Image(z_vol.astype(np.float32), affine), out_path)
+
+print(f"Z-score calcolati per {len(df_als)} pazienti.")
+```
+
+> **Nota implementativa**: il ciclo `for` su ogni paziente è necessario perché le covariabili (età, sesso) differiscono tra pazienti; la predizione normativa è quindi calcolata su misura per ciascun soggetto. La parte computazionalmente onerosa — caricare `beta_vol` e `sigma_vol` — avviene una sola volta prima del ciclo.
+
+### 7.6 Controllo qualità
+
+Prima di procedere all'estrazione ROI (Step 7), è raccomandato eseguire un controllo qualità delle mappe z-score individuali. Per ogni paziente va verificata la distribuzione dei valori: in un soggetto senza grave patologia cerebrale diffusa, la distribuzione degli z-score cerebrali dovrebbe essere approssimativamente gaussiana centrata intorno a 0, con coda positiva nelle regioni ipometaboliche. Distribuzioni con media molto spostata (e.g. media > 1.5 su tutto il cervello) suggeriscono un problema di preprocessing (normalizzazione in intensità fallita, FOV incompleto, o normalizzazione spaziale divergente).
+
+Si raccomanda inoltre di sovrapporre visivamente alcune mappe z-score individuali sul template MNI, per verificare che le regioni di ipometabolismo atteso (corteccia motoria, aree frontali) siano anatomicamente plausibili e che non vi siano artefatti di registrazione (iperintensità nei lobuli parietali posteriori, pattern a virgola nei giri parahippocampali, che sono segni tipici di registrazione fallita).
 
 
