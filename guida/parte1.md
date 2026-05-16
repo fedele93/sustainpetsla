@@ -11,15 +11,18 @@ La pipeline si articola in due parti principali.
 
 **Parte 2** utilizza questi valori ROI come input per SuStaIn, con analisi sull'intero dataset ALS e su sottogruppi selezionati.
 
-| PARTE 1 — Preprocessing & Z-score | PARTE 2 — SuStaIn & Analisi |
-|---|---|
-| 1. Selezione controlli ADNI | 2a. SuStaIn — intero dataset ALS |
-| 2. Preprocessing e normalizzazione spaziale | 2b. SuStaIn — C9orf72 isolato |
-| 3. Smoothing 10mm FWHM | 2c. SuStaIn — sottogruppi genetici |
-| 4. Intensity normalization (whole brain mean) | 2d. Validazione biologica SOD1 |
-| 5. Modello normativo OLS (età + sesso) | 2e. Correlazione con clinica e biomarcatori |
-| 6. Calcolo z-score voxel-wise | 2f. Analisi prognostica per sottotipo |
-| 7. Estrazione valori ROI (atlante AAL) | |
+| PARTE 1 — Preprocessing & Z-score |
+|---|
+| 1. Selezione controlli ADNI |
+| 2. Preprocessing e normalizzazione spaziale |
+| 3. Smoothing 10 mm FWHM |
+| 4. Intensity normalization (whole brain mean) |
+| 5a. Estrazione ROI preliminare — controlli ADNI + pazienti ALS |
+| 5b. Armonizzazione ComBat inter-scanner** |
+| 6. Modello normativo OLS (età + sesso) — sui valori ROI armonizzati |
+| 7. Calcolo z-score ROI — pazienti ALS vs. modello normativo |
+
+
 
 ---
 
@@ -209,13 +212,306 @@ La normalizzazione in intensità standardizza la magnitudine dei valori tra sogg
 La scelta del whole brain mean come reference region è preferita rispetto al cervelletto o al ponte perché in ALS il cervelletto può essere coinvolto nella patologia — vedi ad esempio le forme C9orf72 (Tan et al., 2022). L'uso di una reference region potenzialmente patologica introdurrebbe un bias sistematico negli z-score delle regioni coinvolte.
 
 ---
-## Step (da inserire) Armonizzazione con ComBat
+# Step 5 — Estrazione ROI Preliminare (Controlli + Pazienti ALS)
 
-> qui andrà inserita l'armonizzazione con ComBat fra i controlli ADNI/controlli società di medicina nucleare e le pet SLA.
+Prima di procedere al modello normativo, è necessario ridurre ciascun volume
+intensità-normalizzato (file `i*_w.nii`, prodotto dallo Step 4) a un vettore di
+valori scalari per regione anatomica. Questa operazione — descritta in dettaglio
+nel §7 per le sue implicazioni metodologiche — viene qui anticipata rispetto
+all'ordine narrativo della pipeline perché è **logicamente prerequisita**
+all'armonizzazione ComBat (Step 4c): ComBat opera su una matrice numerica di
+dimensioni ridotte (soggetti × ROI), non sui volumi voxel-wise.
 
-## Step 5 — Modello Normativo Voxel-Wise
+L'estrazione ROI viene applicata a **tutti** i soggetti — controlli ADNI e
+pazienti ALS — usando l'atlante AAL3 (`ROI_MNI_V7.nii`), con la procedura
+descritta nel §7. Si ottengono due matrici:
 
-### Fase 5.1 — Stima del modello
+- $\mathbf{U}_{\text{ctrl}} \in \mathbb{R}^{N_{\text{ctrl}} \times R}$: valori
+  ROI dei controlli ADNI ($N_{\text{ctrl}} = 231$, $R =$ numero di ROI
+  selezionate)
+- $\mathbf{U}_{\text{ALS}} \in \mathbb{R}^{N_{\text{ALS}} \times R}$: valori ROI
+  dei pazienti ALS
+
+Le due matrici vengono concatenate verticalmente in un'unica matrice combinata
+$\mathbf{U} \in \mathbb{R}^{(N_{\text{ctrl}} + N_{\text{ALS}}) \times R}$, che
+costituisce l'input al ComBat.
+
+---
+
+# Step 5b — Armonizzazione Inter-Scanner con ComBat
+
+## 5b.1 Razionale
+
+Le immagini FDG-PET che alimentano questa pipeline provengono da due fonti
+eterogenee: i controlli ADNI acquisiti su scanner diversi distribuiti su scala
+nordamericana, e i pazienti ALS acquisiti su scanner della rete italiana di
+medicina nucleare. Anche dopo la normalizzazione spaziale al template comune
+(Step 2) e la normalizzazione dell'intensità individuale (Step 4), permangono
+differenze sistematiche di origine tecnica attribuibili allo scanner: variazioni
+nella *point spread function* (PSF) e nel relativo effetto di volume parziale,
+differenze nei kernel di ricostruzione iterativa (OSEM) e nei parametri di
+correzione dell'attenuazione, nonché eterogeneità nella calibrazione fotopicca
+e nell'efficienza di rilevazione tra scanner di diversi produttori e generazioni.
+Queste differenze non riflettono la biologia del soggetto ma costituiscono una
+fonte di varianza non biologica — un *effetto batch* nel senso statistico del
+termine — che, se non rimossa, rischia di introdurre pattern artificiosi nelle
+mappe di z-score e, a cascata, di condizionare la stima del modello normativo
+e i sottotipi identificati da SuStaIn.
+
+Il problema è qualitativamente analogo a quello incontrato in genomica quando
+si combinano dati di espressione genica da piattaforme o laboratori diversi.
+L'armonizzazione con ComBat (*Combat-harmonization*) è la soluzione
+metodologica sviluppata per questo contesto e successivamente adattata
+all'imaging cerebrale: rimuove l'effetto additivo e moltiplicativo del batch
+(scanner/sito) mentre preserva la variabilità biologica di interesse (età, sesso,
+differenza malattia–controllo).
+
+## 4b.2 Il modello ComBat
+
+ComBat è stato originalmente proposto da Johnson et al. (2007, *Biostatistics*)
+per l'armonizzazione di dati di microarray. La sua estensione all'imaging
+cerebrale — denominata *neuroCombat* — è stata formalizzata da Fortin et al.
+(2017, *NeuroImage*, per dati di spessore corticale da MRI strutturale) e da
+Fortin et al. (2018, *NeuroImage*, per dati PET e dMRI).
+
+Il modello assume che il valore osservato del biomarcatore $k$ nel soggetto $j$
+appartenente al batch (scanner) $i$ possa essere decomposto come:
+
+$$y_{ijk} = \alpha_k + \mathbf{x}_j^{\top}\boldsymbol{\beta}_k + \gamma_{ik} + \delta_{ik}\,\varepsilon_{ijk}$$
+
+dove $\alpha_k$ è l'intercetta globale per il biomarcatore $k$; $\mathbf{x}_j$
+è il vettore delle covariabili biologiche del soggetto $j$ (età, sesso,
+appartenenza al gruppo) e $\boldsymbol{\beta}_k$ il vettore dei relativi
+coefficienti; $\gamma_{ik}$ è l'**effetto additivo** del batch $i$ sul
+biomarcatore $k$ (spostamento sistematico della media); $\delta_{ik}$ è
+l'**effetto moltiplicativo** del batch $i$ sul biomarcatore $k$ (differenza di
+scala o varianza); $\varepsilon_{ijk}$ è il residuo, assunto normale con media
+zero e varianza unitaria.
+
+I parametri di batch $\gamma_{ik}$ e $\delta_{ik}$ sono stimati con un
+approccio **Bayesiano empirico** (*Empirical Bayes*, EB): invece di stimarli
+indipendentemente per ogni biomarcatore — il che sarebbe instabile con pochi
+soggetti per batch — la stima di ciascun $\gamma_{ik}$ viene regolarizzata
+verso la distribuzione *a posteriori* costruita sfruttando l'informazione
+condivisa tra tutti i biomarcatori. Questa proprietà di *borrowing of strength*
+tra ROI rende ComBat particolarmente robusto in presenza di batch con un numero
+ridotto di soggetti, che è esattamente la situazione di questo dataset (i
+pazienti ALS sono distribuiti su più centri con numerosità variabile).
+
+Il dato armonizzato è:
+
+$$\hat{y}_{ijk} = \frac{y_{ijk} - \hat{\alpha}_k - \mathbf{x}_j^{\top}\hat{\boldsymbol{\beta}}_k - \hat{\gamma}_{ik}}{\hat{\delta}_{ik}} + \hat{\alpha}_k + \mathbf{x}_j^{\top}\hat{\boldsymbol{\beta}}_k$$
+
+In parole: si rimuovono gli effetti additivi e moltiplicativi del batch, e si
+ricolloca il dato sulla scala dell'effetto biologico globale e individuale.
+
+## 5b.3 Covariabili da proteggere
+
+L'inclusione corretta delle covariabili biologiche nel modello ComBat è
+metodologicamente critica. Se la variabile `gruppo` (controllo *vs.* paziente
+ALS) non viene inclusa come covariabile da preservare, ComBat interpreterà le
+differenze metaboliche malattia–controllo come un effetto di batch — ovvero come
+differenze tecniche — e le rimuoverà, distruggendo il segnale biologico
+principale. Lo stesso vale per età e sesso, le cui associazioni con il
+metabolismo cerebrale devono essere protette per non compromettere la stima del
+modello normativo al passo successivo.
+
+Le covariabili incluse nel modello ComBat come variabili di *protezione* sono
+pertanto:
+
+- `group`: variabile categorica (0 = controllo CN, 1 = paziente ALS)
+- `age`: età alla data di acquisizione della scansione PET, trattata come
+  variabile continua
+- `sex`: sesso biologico, trattato come variabile categorica (0 = F, 1 = M)
+
+## 5b.4 Definizione del batch
+
+La variabile di batch identifica, per ogni soggetto, lo scanner (o il sito di
+acquisizione) su cui è stata acquisita la PET. Per i controlli ADNI, questa
+informazione è disponibile nei metadati del portale (tabella `PETQC` o campo
+`SCANNERTYPE`). Per i pazienti ALS, la variabile di batch corrisponde al centro
+di acquisizione. Qualora la granularità degli scanner ADNI risulti eccessiva
+(molti scanner con pochissimi soggetti ciascuno, rendendo l'Empirical Bayes
+instabile), è appropriato aggregare per modello di scanner (es. tutte le unità
+Siemens Biograph mMR dello stesso sito) o per sito di acquisizione.
+
+## 4c.5 Posizionamento nell'ordine della pipeline
+
+La scelta di applicare ComBat **dopo** l'estrazione ROI — piuttosto che
+direttamente sui volumi voxel-wise — è dettata da considerazioni pratiche e
+metodologiche. Dal punto di vista pratico, applicare ComBat su volumi 3D con
+circa 400.000 voxel per soggetto richiederebbe risorse computazionali ingenti
+(memoria RAM proporzionale a $N \times V$, con $V \sim 4 \times 10^5$) senza
+portare un vantaggio sostanziale: gli effetti di scanner si manifestano come
+differenze sistematiche tra regioni e non come pattern rumorosi voxel-wise
+casuali, e sono quindi catturati adeguatamente a livello ROI. Dal punto di vista
+metodologico, applicare ComBat sulla matrice ROI è coerente con l'approccio
+adottato in letteratura per pipeline analoghe che combinano popolazioni di
+controllo di riferimento con coorti di pazienti acquisiti in centri diversi
+(Pomponio et al., 2020, *NeuroImage*; Beer et al., 2020, *Human Brain Mapping*).
+
+Di conseguenza, l'ordine logico della pipeline è:
+
+1. Estrazione ROI su controlli e pazienti → matrice $\mathbf{U}$ (Step 4b)
+2. Armonizzazione ComBat su $\mathbf{U}$ → matrice armonizzata $\tilde{\mathbf{U}}$ (Step 4c)
+3. Separazione di $\tilde{\mathbf{U}}$ in controlli e pazienti
+4. Stima del modello normativo sui valori ROI dei controlli armonizzati (Step 5, adattato)
+5. Calcolo degli z-score ROI per i pazienti ALS rispetto al modello normativo armonizzato (Step 6, adattato)
+
+**Nota sul rapporto con il modello normativo voxel-wise**: il documento descrive
+anche una versione voxel-wise del modello normativo e degli z-score (Step 5–6
+originali), utile per la visualizzazione di mappe z-score cerebrali complete.
+Quella pipeline rimane valida per le analisi esplorative visive e per le
+eventuali analisi second-level con SPM. La matrice ROI armonizzata $\tilde{\mathbf{U}}$
+è invece l'input diretto a SuStaIn, e rappresenta il percorso quantitativo
+primario.
+
+## 5b.6 Implementazione computazionale
+
+L'armonizzazione è eseguita con la libreria Python `neuroCombat` (Fortin et al.,
+2018), installabile via `pip install neuroCombat`. Il codice opera sulla matrice
+combinata controlli + pazienti; la separazione dei due gruppi avviene dopo
+l'armonizzazione, non prima.
+
+```python
+import numpy as np
+import pandas as pd
+from neuroCombat import neuroCombat
+
+# -----------------------------------------------------------------------
+# 1. Carica le matrici ROI prodotte allo Step 4b
+#    Ogni riga è un soggetto, ogni colonna una ROI
+#    Le colonne non-ROI ('SubjectID', 'group', 'age', 'sex', 'scanner_id')
+#    devono essere presenti nel DataFrame ma non passate come dati a ComBat
+# -----------------------------------------------------------------------
+df_ctrl = pd.read_csv('roi_controls_adni.csv')   # shape: (N_ctrl, N_ROI + meta)
+df_als  = pd.read_csv('roi_patients_als.csv')    # shape: (N_als,  N_ROI + meta)
+
+roi_labels = [c for c in df_ctrl.columns
+              if c not in ['SubjectID', 'group', 'age', 'sex', 'scanner_id']]
+
+# Concatena in ordine: prima i controlli, poi i pazienti
+# (l'ordine è importante per la separazione successiva)
+df_all = pd.concat([df_ctrl, df_als], axis=0, ignore_index=True)
+n_ctrl = len(df_ctrl)
+
+# -----------------------------------------------------------------------
+# 2. Matrice dati in forma (N_features, N_subjects) — richiesta da neuroCombat
+# -----------------------------------------------------------------------
+data_matrix = df_all[roi_labels].values.T   # shape: (N_ROI, N_ctrl + N_als)
+
+# -----------------------------------------------------------------------
+# 3. DataFrame delle covariabili (una riga per soggetto)
+#    'batch'  → scanner/sito (variabile da rimuovere)
+#    'age'    → età (covariabile biologica da preservare, continua)
+#    'sex'    → sesso (covariabile biologica da preservare, categorica)
+#    'group'  → 0=controllo, 1=ALS (CRITICO: deve essere incluso per
+#               proteggere le differenze malattia–controllo dall'essere
+#               interpretate come effetto di batch)
+# -----------------------------------------------------------------------
+covars = pd.DataFrame({
+    'batch': df_all['scanner_id'].values,
+    'age':   df_all['age'].values,
+    'sex':   df_all['sex'].values,
+    'group': df_all['group'].values
+})
+
+# -----------------------------------------------------------------------
+# 4. Esegui ComBat
+#    categorical_cols: variabili trattate come fattori (dummies interne)
+#    continuous_cols:  variabili trattate come covariate lineari
+# -----------------------------------------------------------------------
+combat_out = neuroCombat(
+    dat              = data_matrix,
+    covars           = covars,
+    batch_col        = 'batch',
+    categorical_cols = ['sex', 'group'],
+    continuous_cols  = ['age']
+)
+
+# Output armonizzato: forma (N_ROI, N_soggetti) → ritrasponim a (N_soggetti, N_ROI)
+data_harmonized = combat_out['data'].T
+
+# -----------------------------------------------------------------------
+# 5. Separa controlli e pazienti armonizzati
+# -----------------------------------------------------------------------
+roi_ctrl_harm = data_harmonized[:n_ctrl, :]   # shape: (N_ctrl, N_ROI)
+roi_als_harm  = data_harmonized[n_ctrl:, :]   # shape: (N_als,  N_ROI)
+
+# -----------------------------------------------------------------------
+# 6. Salva le matrici armonizzate come CSV per i passi successivi
+# -----------------------------------------------------------------------
+df_ctrl_harm = pd.DataFrame(roi_ctrl_harm, columns=roi_labels)
+df_ctrl_harm.insert(0, 'SubjectID', df_ctrl['SubjectID'].values)
+df_ctrl_harm.to_csv('roi_controls_adni_harmonized.csv', index=False)
+
+df_als_harm = pd.DataFrame(roi_als_harm, columns=roi_labels)
+df_als_harm.insert(0, 'SubjectID', df_als['SubjectID'].values)
+df_als_harm.to_csv('roi_patients_als_harmonized.csv', index=False)
+
+print(f'ComBat completato. Matrici armonizzate salvate.')
+print(f'  Controlli: {roi_ctrl_harm.shape}')
+print(f'  Pazienti ALS: {roi_als_harm.shape}')
+```
+
+> **Nota implementativa — batch con pochi soggetti**: se alcuni scanner
+> contengono un numero molto ridotto di soggetti (< 5–10), la stima
+> dell'Empirical Bayes per quel batch può essere instabile. In questo caso
+> è opportuno aggregare scanner dello stesso sito o dello stesso modello in
+> un unico batch, oppure adottare la variante `neuroCombat` con l'opzione
+> `eb=False` (OLS puro senza regolarizzazione Bayesiana), che è meno efficiente
+> ma non richiede assunzioni distributive sui parametri di batch.
+
+## 4c.7 Controllo qualità post-armonizzazione
+
+Dopo l'armonizzazione è essenziale verificare che ComBat abbia rimosso l'effetto
+di scanner senza alterare la struttura biologica del dataset. Il controllo
+qualità comprende due verifiche complementari.
+
+La prima è di tipo **visivo**: si costruisce una PCA biplot della matrice ROI
+prima e dopo l'armonizzazione, colorando i punti per batch (scanner) e per
+gruppo (controllo/ALS). Prima dell'armonizzazione è atteso che i soggetti si
+raggruppino parzialmente per scanner; dopo l'armonizzazione i cluster per
+scanner devono dissolversi, mentre la separazione tra controlli e pazienti —
+se presente — deve essere preservata o rafforzata.
+
+La seconda è **quantitativa**: si calcola, per ogni ROI, la statistica F di un
+ANOVA a effetti fissi con il batch come fattore, prima e dopo l'armonizzazione,
+e se ne confronta il valore p. Dopo ComBat, i valori F associati al batch
+devono ridursi sostanzialmente; i valori F associati al gruppo (controllo/ALS),
+calcolati separatamente, devono invece mantenersi stabili o aumentare, a
+conferma che il segnale biologico è stato preservato.
+
+```python
+from scipy import stats
+
+print(f"{'ROI':<30} {'F_batch_pre':>12} {'F_batch_post':>13} {'F_group_post':>13}")
+print("-" * 72)
+
+for i, roi in enumerate(roi_labels):
+    batches  = covars['batch'].values
+    groups   = covars['group'].values
+
+    # F del batch prima dell'armonizzazione
+    groups_pre  = [data_matrix[i, batches == b] for b in np.unique(batches)]
+    F_pre, _    = stats.f_oneway(*groups_pre)
+
+    # F del batch dopo l'armonizzazione
+    groups_post = [data_harmonized[:, i][batches == b] for b in np.unique(batches)]
+    F_post, _   = stats.f_oneway(*groups_post)
+
+    # F del gruppo (ctrl vs ALS) dopo l'armonizzazione
+    ctrl_vals   = data_harmonized[:n_ctrl, i]
+    als_vals    = data_harmonized[n_ctrl:, i]
+    F_grp, _    = stats.f_oneway(ctrl_vals, als_vals)
+
+    print(f"{roi:<30} {F_pre:>12.2f} {F_post:>13.2f} {F_grp:>13.2f}")
+```
+
+
+## Step 6 — Modello Normativo Voxel-Wise
+
+### Fase 6.1 — Stima del modello
 
 Per ogni voxel $j$, viene stimato un modello di regressione lineare OLS (minimi quadrati ordinari) sui 231 controlli ADNI (*o il numero dei controlli  della società italiana di medicina nucleare*):
 
@@ -233,7 +529,7 @@ Per ogni voxel vengono stimati e salvati:
 
 La stima è eseguita in forma vettorizzata sull'intera matrice voxel × soggetti in un'unica operazione matriciale, previa applicazione di una maschera cerebrale (voxel con media > 0.1 nel campione di controllo; 403.117 voxel su 585.390 totali, 68.9%).
 
-### Fase 5.2 — Output del modello
+### Fase 6.2 — Output del modello
 
 Il modello normativo produce tre file NIfTI:
 
@@ -246,9 +542,9 @@ Un file `normative_params.mat` contiene i parametri di standardizzazione ($\mu_{
 
 ---
 
-## Step 6 — Calcolo degli Z-Score Individuali 
+## Step 7 — Calcolo degli Z-Score Individuali 
 
-### 6.1 Principio generale e razionale
+### 7.1 Principio generale e razionale
 
 L'obiettivo di questo step è trasformare le immagini FDG-PET dei pazienti ALS da valori di uptake metabolico assoluto (o relativo, dopo la normalizzazione in intensità) in misure di *deviazione dalla norma* espressa in unità di deviazione standard. La logica è la stessa di qualsiasi z-score: si vuole rispondere alla domanda "di quante deviazioni standard il metabolismo di questo paziente in questo voxel si discosta da quello atteso per un soggetto sano della stessa età e dello stesso sesso?".
 
@@ -278,7 +574,7 @@ $$\text{age}_{z,i} = \frac{\text{age}_i - \mu_{\text{age}}}{\sigma_{\text{age}}}
 
 Questo è essenziale: usare i parametri del campione di controllo — e non ricalcolarli sui pazienti — assicura che lo z-score rifletta la distanza dalla norma sana, non dalla distribuzione patologica. Un paziente di 80 anni non viene confrontato con la media dei pazienti ALS, ma con la predizione del modello normativo per un ipotetico soggetto sano di 80 anni.
 
-### 6.3 Inversione del segno e convenzione SuStaIn
+### 7.3 Inversione del segno e convenzione SuStaIn
 
 L'FDG-PET è un marcatore di **metabolismo glucidico**: la patologia neurodegenerativa causa riduzione del metabolismo, quindi le regioni colpite presentano z-score *negativi* rispetto ai controlli sani. SuStaIn, nella sua implementazione a z-score (ZscoreSustain), è concepito per lavorare con valori positivi crescenti, dove valori più alti indicano maggiore patologia.
 
@@ -290,13 +586,13 @@ Dopo questa trasformazione, uno z-score finale di +2 in una regione frontale sig
 
 > **Nota critica — implicazione per l'interpretazione**: i valori scalari che entrano in SuStaIn sono già con il segno invertito. Nelle analisi esplorative (distribuzione per ROI, heatmap), i valori positivi corrispondono all'ipometabolismo. È buona pratica indicare esplicitamente nelle didascalie delle figure se si utilizza la convenzione di segno originale (z negativo = ipometabolismo) o invertita (z positivo = ipometabolismo).
 
-### 6.4 Output e organizzazione dei file
+### 7.4 Output e organizzazione dei file
 
 Per ogni paziente ALS $i$, viene prodotto un file NIfTI `z_<SUBJECT_ID>.nii` contenente la mappa z-score finale (con segno invertito) nello spazio MNI (voxel 2×2×2 mm³, dimensioni identiche alle immagini normalizzate dei controlli). I voxel fuori dalla maschera cerebrale vengono impostati a NaN (o 0) per chiarezza nella visualizzazione.
 
 L'insieme di tutti i file `z_*.nii` costituisce la *libreria di mappe z-score* che alimenta sia lo Step 7 (estrazione ROI scalare per SuStaIn) sia eventuali analisi voxel-wise esplorative di gruppo (SPM second-level, se future analisi le richiedessero).
 
-### 6.5 Implementazione computazionale
+### 7.5 Implementazione computazionale
 
 Il calcolo è eseguito in Python (ambiente Conda, notebook Jupyter), sfruttando la vettorizzazione NumPy per operare su tutti i pazienti in parallelo. Di seguito la struttura logica del codice; la versione completa è inclusa in Appendice A.4.
 
@@ -357,7 +653,7 @@ print(f"Z-score calcolati per {len(df_als)} pazienti.")
 
 > **Nota implementativa**: il ciclo `for` su ogni paziente è necessario perché le covariabili (età, sesso) differiscono tra pazienti; la predizione normativa è quindi calcolata su misura per ciascun soggetto. La parte computazionalmente onerosa — caricare `beta_vol` e `sigma_vol` — avviene una sola volta prima del ciclo.
 
-### 6.6 Controllo qualità
+### 7.6 Controllo qualità
 
 Prima di procedere all'estrazione ROI (Step 7), è raccomandato eseguire un controllo qualità delle mappe z-score individuali. Per ogni paziente va verificata la distribuzione dei valori: in un soggetto senza grave patologia cerebrale diffusa, la distribuzione degli z-score cerebrali dovrebbe essere approssimativamente gaussiana centrata intorno a 0, con coda positiva nelle regioni ipometaboliche. Distribuzioni con media molto spostata (e.g. media > 1.5 su tutto il cervello) suggeriscono un problema di preprocessing (normalizzazione in intensità fallita, FOV incompleto, o normalizzazione spaziale divergente).
 
@@ -365,9 +661,9 @@ Si raccomanda inoltre di sovrapporre visivamente alcune mappe z-score individual
 
 ---
 
-# Step 7 — Estrazione dei Valori ROI (Atlante AAL3)
+# Step 8 — Estrazione dei Valori ROI (Atlante AAL3)
 
-## 7.1 Razionale della riduzione dimensionale
+## 8.1 Razionale della riduzione dimensionale
 
 Le mappe z-score voxel-wise prodotte allo Step 6 descrivono ciascun paziente con un vettore di circa 200.000–400.000 valori scalari — uno per ogni voxel della maschera cerebrale nello spazio MNI a risoluzione 2 mm isotropica. Applicare SuStaIn direttamente a questa rappresentazione sarebbe computazionalmente proibitivo e statisticamente instabile: il modello ZscoreSuStaIn deve stimare una sequenza ordinata di "eventi" (ciascuno definito da una regione e da una soglia z), e con centinaia di migliaia di potenziali biomarker il problema diventerebbe non identificabile con campioni dell'ordine di qualche centinaio di soggetti.
 
@@ -375,7 +671,7 @@ La riduzione a un singolo valore scalare per regione anatomica di interesse (ROI
 
 ---
 
-## 7.2 Atlante utilizzato: AAL3
+## 8.2 Atlante utilizzato: AAL3
 
 Come schema di parcellizzazione viene utilizzato l'atlante **AAL3** (*Automated Anatomical Labeling 3*, Rolls et al., 2020, *NeuroImage* 206:116189), nella versione `AAL3v1` distribuita dal Neurofunctional Imaging Group (GIN, UMR5296, Bordeaux) con licenza GNU GPL.
 
@@ -387,7 +683,7 @@ Il file atlas utilizzato è `ROI_MNI_V7.nii`, con risoluzione **2×2×2 mm³** n
 
 ---
 
-## 7.3 Formalizzazione matematica
+## 8.3 Formalizzazione matematica
 
 Sia
 
@@ -421,7 +717,7 @@ dove $N$ è il numero di pazienti ALS e $R$ il numero di ROI selezionate. Questa
 
 ---
 
-## 7.4 Set di ROI selezionate
+## 8.4 Set di ROI selezionate
 
 Il set comprende **24 ROI** (11 coppie bilaterali sinistra/destra + 1 coppia di cingolato anteriore pregenuale), selezionate sulla base di tre livelli di evidenza convergenti: la stadiazione neuropatologica TDP-43 di Brettschneider et al. (2013), i cluster metabolici PET identificati da Tan et al. (2022) nella coorte ALS multicentrica, e il fenotipo clinico ALS/ALS-FTD nelle sue varianti genetiche.
 
@@ -450,7 +746,7 @@ I volumi in voxel sono riportati dalla colonna `vol_vox` del file `ROI_MNI_V7_vo
 
 ---
 
-## 7.5 Implementazione tecnica in Python (nibabel)
+## 8.5 Implementazione tecnica in Python (nibabel)
 
 L'estrazione viene eseguita interamente in Python, senza passaggio per MATLAB/SPM, garantendo continuità con l'ambiente in cui gira SuStaIn e piena riproducibilità tramite il codice versionato su GitHub.
 
@@ -590,7 +886,7 @@ print(f'\nMatrice {N}×{R} salvata in: {output_csv}')
 
 ---
 
-## 7.6 Utilizzo dell'atlante AAL3 in MRIcroGL (per le figure)
+## 8.6 Utilizzo dell'atlante AAL3 in MRIcroGL (per le figure)
 
 MRIcroGL supporta nativamente AAL3 tramite i file distribuiti con l'archivio. L'installazione consente di usare lo stesso atlante sia per l'estrazione quantitativa (Python) sia per la visualizzazione qualitativa e la produzione delle figure di pubblicazione, garantendo coerenza anatomica end-to-end.
 
@@ -655,10 +951,12 @@ Prima di passare al modello SuStaIn è necessario ispezionare la struttura della
 7. https://github.com/ucl-pond/pySuStaIn — Repository pySuStaIn (licenza MIT)
 
 8. https://adni.loni.usc.edu/data-samples/adni-data/#AccessData — Portale download immagini ADNI
+9. **Johnson WE, Li C, Rabinovic A (2007)**. Adjusting batch effects in microarray expression data using empirical Bayes methods. *Biostatistics*, 8(1):118–127. (da controllare)
+10. **Fortin JP et al. (2017)**. Harmonization of cortical thickness measurements across scanners and sites. *NeuroImage*, 167:104–120. (da controllare)
+11. **Fortin JP et al. (2018)**. Harmonization of multi-site diffusion tensor imaging data. *NeuroImage*, 161:149–170. (da controllare)
+12. **Pomponio R et al. (2020)**. Harmonization of large MRI datasets for the analysis of brain imaging patterns throughout the lifespan. *NeuroImage*, 208:116450. (da conrollare)
 
 ---
-
-*Versione 1.8 — parte 1*
 
 ---
 
