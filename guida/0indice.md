@@ -26,7 +26,7 @@
 ## Flusso dati
 
 ```
-DICOM (ADNI + ALS)
+DICOM (ADNIe/o med nucleare + ALS)
     │
     ▼ Step 1–4 (MATLAB/SPM)
 i*_w.nii  (uptake intensità-normalizzato)
