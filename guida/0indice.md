@@ -6,7 +6,7 @@
 
 | File | Contenuto | Step |
 |------|-----------|------|
-| [Preprocessing](parte1_preprocessing.md) | Selezione ADNI, MATLAB/SPM, NIfTI, smoothing, intensity normalization | 1–4 |
+| [Preprocessing](1preprocessing) | Selezione ADNI, MATLAB/SPM, NIfTI, smoothing, intensity normalization | 1–4 |
 | [ROI & ComBat](parte1_roi_combat.md) | Atlante AAL3, estrazione ROI da uptake, armonizzazione inter-scanner | 5–6 |
 | [Normativo & Z-Score](parte1_normativo_zscore.md) | Modello normativo OLS, calcolo z-score ROI, controllo qualità pre-SuStaIn | 7–8 |
 | [Appendice](parte1_appendice.md) | Script completi: MATLAB (preprocessing, intensity norm, modello voxel-wise) e Python (percorso visivo) | — |
