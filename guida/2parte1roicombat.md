@@ -40,7 +40,14 @@ AAL3 aggiunge rispetto alle versioni precedenti la suddivisione del cingolato an
 
 #### 5.3.1 Definizioni di base
 
-Sia $F_i(\mathbf{v})$ il valore di uptake FDG relativo del soggetto $i$ nel voxel $\mathbf{v} \in \mathbb{Z}^3$, risultante dall'intensity normalization (Step 4):
+Sia 
+
+$F_i(\mathbf{v})$
+
+il valore di uptake FDG relativo del soggetto $i$ nel voxel 
+$\mathbf{v} \in \mathbb{Z}^3$,
+
+risultante dall'intensity normalization (Step 4):
 
 $$F_i(\mathbf{v}) = \frac{S_i(\mathbf{v})}{\bar{S}_i^{\text{WBM}}}$$
 
