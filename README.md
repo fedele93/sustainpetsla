@@ -33,7 +33,7 @@ DICOM (ADNI CN + pazienti ALS)
 i*_w.nii  [uptake FDG intensità-normalizzato, spazio MNI 2mm]
     │
     ▼  Step 5  (Python / nibabel)
-U_ctrl, U_ALS  [matrici ROI uptake — atlante AAL3, 24 regioni (numeroda confermare)]
+U_ctrl, U_ALS  [matrici ROI uptake — atlante AAL3, 24 regioni (numero da confermare)]
     │
     ▼  Step 6  (neuroCombat)
 Ũ_ctrl, Ũ_ALS  [matrici armonizzate inter-scanner]
@@ -118,7 +118,7 @@ Ambiente consigliato: `conda activate sustain_tutorial_env`
 - [ ] Modello normativo ROI + z-score ROI (Step 7–8)
 - [ ] SuStaIn dataset completo (Analisi 2a)
 - [ ] SuStaIn C9orf72 isolato (Analisi 2b)
-- [ ] Analisi post-hoc e validazione SOD1  // da discuter
+- [ ] Analisi post-hoc e validazione SOD1  // da discutere
 - [ ] EBM mutation-specific  // non ancora implementato
 
 ---
