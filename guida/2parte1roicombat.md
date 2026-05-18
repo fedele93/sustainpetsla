@@ -38,7 +38,15 @@ AAL3 aggiunge rispetto alle versioni precedenti la suddivisione del cingolato an
 
 ### 5.3 Formalizzazione matematica
 
-Sia $F_i(\mathbf{v})$ il valore di uptake FDG relativo del soggetto $i$ nel voxel $\mathbf{v}$ (intensità-normalizzato). Sia $\mathcal{M}_r$ l'insieme dei voxel appartenenti alla ROI $r$ secondo la maschera binaria AAL3, e $\mathcal{M}_{\text{FOV},i}$ la maschera del campo visivo del soggetto $i$ (i voxel non-NaN nel volume).
+Sia $F_i(\mathbf{v})$ il valore di uptake FDG relativo del soggetto $i$ nel voxel $\mathbf{v}$ (intensità-normalizzato). Sia $\mathcal{M}_r$ l'insieme dei voxel appartenenti alla ROI 
+
+$r$
+
+secondo la maschera binaria AAL3, e 
+
+$\mathcal{M}_{\text{FOV},i}$
+
+la maschera del campo visivo del soggetto $i$ (i voxel non-NaN nel volume).
 
 Il valore ROI del soggetto $i$ per la regione $r$ è la media dell'uptake sui voxel nell'intersezione tra maschera anatomica e FOV:
 
