@@ -27,7 +27,7 @@ La Parte 1 segue due percorsi paralleli con finalità distinte:
 | 8 | Z-score ROI (pazienti ALS vs. norma) | $\tilde{\mathbf{U}}_{\text{ALS}}$ + modello → $\mathbf{Z}$ → **SuStaIn** |
 | V | *(Opzionale)* Z-score voxel-wise per mappe visive | `i*_w.nii` ALS + modello voxel-wise → `z_*.nii` |
 
-> **Nota sul percorso visivo (Step V)**: il modello normativo voxel-wise e il calcolo degli z-score voxel-wise sono descritti nell'[Appendice]([parte1_appendice.md](https://github.com/fedele93/sustainpetsla/blob/main/guida/4appendicepart1.md#a3--percorso-visivo-modello-normativo-voxel-wise)). La loro esecuzione è indipendente dal percorso primario e produce mappe ad uso esclusivamente visivo: non sono armonizzate con ComBat e non alimentano SuStaIn.
+> **Nota sul percorso visivo (Step V)**: il modello normativo voxel-wise e il calcolo degli z-score voxel-wise sono descritti nell'[Appendice](https://github.com/fedele93/sustainpetsla/blob/main/guida/4appendicepart1.md#a3--percorso-visivo-modello-normativo-voxel-wise). La loro esecuzione è indipendente dal percorso primario e produce mappe ad uso esclusivamente visivo: non sono armonizzate con ComBat e non alimentano SuStaIn.
 
 ---
 
@@ -96,7 +96,7 @@ Dopo la normalizzazione spaziale, ogni immagine viene convolta con un kernel gau
 
 Lo smoothing è applicato dopo la normalizzazione spaziale — non prima — in modo da essere omogeneo tra controlli ADNI e pazienti ALS, indipendentemente dall'unità di misura originale delle immagini.
 
-Gli script MATLAB completi per i Step 2 e 3 sono in [Appendice A.1]([parte1_appendice.md#a1--preprocessing-e-normalizzazione-spaziale](https://github.com/fedele93/sustainpetsla/blob/main/guida/4appendicepart1.md#a1--preprocessing-e-normalizzazione-spaziale).
+Gli script MATLAB completi per i Step 2 e 3 sono in [Appendice A.1](https://github.com/fedele93/sustainpetsla/blob/main/guida/4appendicepart1.md#a1--preprocessing-e-normalizzazione-spaziale).
 
 ---
 
@@ -110,7 +110,7 @@ La scelta del whole brain mean come reference region è preferita rispetto al ce
 
 **Naming convention output**: per ogni soggetto con file di input `s<SUBJECT_ID>_w.nii`, lo script produce `i<SUBJECT_ID>_w.nii` in una cartella separata.
 
-Lo script MATLAB completo è in [Appendice A.2]([parte1_appendice.md#a2--intensity-normalization](https://github.com/fedele93/sustainpetsla/blob/main/guida/4appendicepart1.md#a2--intensity-normalization)).
+Lo script MATLAB completo è in [Appendice A.2](https://github.com/fedele93/sustainpetsla/blob/main/guida/4appendicepart1.md#a2--intensity-normalization).
 
 ---
 
