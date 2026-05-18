@@ -53,7 +53,15 @@ $$F_i(\mathbf{v}) = \frac{S_i(\mathbf{v})}{\bar{S}_i^{\text{WBM}}}$$
 
 dove $S_i(\mathbf{v})$ è il segnale FDG grezzo (già in spazio MNI e smoothato a 10 mm FWHM) e $\bar{S}_i^{\text{WBM}}$ è la media del whole brain mask del soggetto $i$. Per costruzione, la media di $F_i(\mathbf{v})$ su tutti i voxel intra-cerebrali è uguale a 1 per ogni soggetto.
 
-Sia $\mathcal{M}_r \subset \mathbb{Z}^3$ l'insieme dei voxel appartenenti alla ROI $r$ secondo la maschera binaria AAL3 — determinato a priori dall'atlante, uguale per tutti i soggetti. Sia $\mathcal{M}_{\text{FOV},i} = \{\mathbf{v} : F_i(\mathbf{v}) \neq \text{NaN}\}$ la maschera del campo visivo del soggetto $i$.
+Sia 
+
+$\mathcal{M}_r \subset \mathbb{Z}^3$
+
+l'insieme dei voxel appartenenti alla ROI 
+
+$r$
+
+secondo la maschera binaria AAL3 — determinato a priori dall'atlante, uguale per tutti i soggetti. Sia $\mathcal{M}_{\text{FOV},i} = \{\mathbf{v} : F_i(\mathbf{v}) \neq \text{NaN}\}$ la maschera del campo visivo del soggetto $i$.
 
 Il valore ROI del soggetto $i$ per la regione $r$ è la media aritmetica dell'uptake sui voxel nell'intersezione tra maschera anatomica e FOV:
 
