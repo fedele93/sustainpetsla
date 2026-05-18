@@ -38,25 +38,56 @@ AAL3 aggiunge rispetto alle versioni precedenti la suddivisione del cingolato an
 
 ### 5.3 Formalizzazione matematica
 
-Sia $F_i(\mathbf{v})$ il valore di uptake FDG relativo del soggetto $i$ nel voxel $\mathbf{v}$ (intensità-normalizzato). Sia $\mathcal{M}_r$ l'insieme dei voxel appartenenti alla ROI 
+#### 5.3.1 Definizioni di base
 
-$r$
+Sia $F_i(\mathbf{v})$ il valore di uptake FDG relativo del soggetto $i$ nel voxel $\mathbf{v} \in \mathbb{Z}^3$, risultante dall'intensity normalization (Step 4):
 
-secondo la maschera binaria AAL3, e 
+$$F_i(\mathbf{v}) = \frac{S_i(\mathbf{v})}{\bar{S}_i^{\text{WBM}}}$$
 
-$\mathcal{M}_{\text{FOV},i}$
+dove $S_i(\mathbf{v})$ è il segnale FDG grezzo (già in spazio MNI e smoothato a 10 mm FWHM) e $\bar{S}_i^{\text{WBM}}$ è la media del whole brain mask del soggetto $i$. Per costruzione, la media di $F_i(\mathbf{v})$ su tutti i voxel intra-cerebrali è uguale a 1 per ogni soggetto.
 
-la maschera del campo visivo del soggetto $i$ (i voxel non-NaN nel volume).
+Sia $\mathcal{M}_r \subset \mathbb{Z}^3$ l'insieme dei voxel appartenenti alla ROI $r$ secondo la maschera binaria AAL3 — determinato a priori dall'atlante, uguale per tutti i soggetti. Sia $\mathcal{M}_{\text{FOV},i} = \{\mathbf{v} : F_i(\mathbf{v}) \neq \text{NaN}\}$ la maschera del campo visivo del soggetto $i$.
 
-Il valore ROI del soggetto $i$ per la regione $r$ è la media dell'uptake sui voxel nell'intersezione tra maschera anatomica e FOV:
+Il valore ROI del soggetto $i$ per la regione $r$ è la media aritmetica dell'uptake sui voxel nell'intersezione tra maschera anatomica e FOV:
 
 $$\bar{u}_{i,r} = \frac{1}{|\mathcal{M}_r \cap \mathcal{M}_{\text{FOV},i}|} \sum_{\mathbf{v} \in \mathcal{M}_r \cap \mathcal{M}_{\text{FOV},i}} F_i(\mathbf{v})$$
 
-L'intersezione con $\mathcal{M}_{\text{FOV},i}$ è necessaria perché alcune scansioni PET hanno un FOV assiale ridotto che non copre le porzioni inferiori del cervelletto. Il denominatore si adatta automaticamente ai voxel effettivamente disponibili; la ROI risulta NaN solo se la copertura è zero.
+Se $|\mathcal{M}_r \cap \mathcal{M}_{\text{FOV},i}| = 0$, la ROI è non definita e il valore viene impostato a NaN (copertura FOV nulla).
+
+#### 5.3.2 Proprietà statistiche dello stimatore
+
+La media è uno stimatore consistente e non distorto del metabolismo medio della regione. Assumendo che i voxel all'interno della ROI siano realizzazioni di una variabile con media $\mu_{i,r}$ e varianza del segnale $\sigma_\text{sig}^2$, la varianza dello stimatore è:
+
+$$\mathrm{Var}(\bar{u}_{i,r}) = \frac{\sigma_{\text{eff}}^2}{n_r}$$
+
+dove $n_r = |\mathcal{M}_r \cap \mathcal{M}_{\text{FOV},i}|$ e $\sigma_{\text{eff}}^2$ è la varianza efficace, aumentata rispetto a $\sigma_\text{sig}^2$ per effetto della correlazione spaziale tra voxel vicini.
+
+#### 5.3.3 Effetto dello smoothing sulla correlazione spaziale
+
+Lo smoothing gaussiano a **10 mm FWHM** applicato al passo 3 (corrispondente a $\sigma_{\text{smooth}} \approx 4.25 \text{ mm}$) introduce una correlazione spaziale tra voxel adiacenti. Il raggio di correlazione efficace è dell'ordine di $\sigma_{\text{smooth}}$, pari a circa 2 voxel (alla risoluzione 2×2×2 mm³). Ciò riduce il numero di "campioni indipendenti" effettivi all'interno della ROI rispetto al numero nominale di voxel.
+
+Il numero di voxel indipendenti effettivi si stima come:
+
+$$n_{\text{eff}} \approx \frac{n_r}{(1 + 2\rho_1 + 2\rho_2 + \ldots)}$$
+
+dove $\rho_k$ è la correlazione media tra un voxel e i suoi vicini al $k$-esimo ordine. Per smoothing 10 mm su voxel 2 mm, tipicamente $n_{\text{eff}} \approx n_r / 5\text{–}10$.
+
+Questa considerazione ha due implicazioni pratiche:
+
+1. **Soglia minima di voxel per ROI**: una ROI con $n_r < 300$ voxel corrisponde a circa $n_{\text{eff}} < 50$ campioni indipendenti — margine ridotto per uno stimatore stabile. La soglia operativa adottata in questa pipeline è $n_r \geq 400$ voxel; ROI al di sotto di questa soglia vengono segnalate come *borderline* e richiedono giustificazione clinica esplicita o fusione con regioni adiacenti (§5.4).
+2. **Varianza dello stimatore ROI**: la precisione di $\bar{u}_{i,r}$ cresce con $\sqrt{n_{\text{eff}}}$, non con $\sqrt{n_r}$. Anche una ROI da 1000 voxel può avere una precisione inferiore a quella attesa se il segnale è fortemente smoothato.
+
+#### 5.3.4 Copertura FOV parziale
+
+L'intersezione con $\mathcal{M}_{\text{FOV},i}$ è necessaria perché alcune scansioni PET hanno un FOV assiale ridotto che non copre le porzioni inferiori del cervelletto. Si definisce la **copertura relativa** della ROI per il soggetto $i$ come:
+
+$$c_{i,r} = \frac{|\mathcal{M}_r \cap \mathcal{M}_{\text{FOV},i}|}{|\mathcal{M}_r|}$$
+
+Il denominatore della formula di $\bar{u}_{i,r}$ si adatta automaticamente ai voxel effettivamente disponibili (lo stimatore è non distorto purché i voxel mancanti siano distribuiti uniformemente all'interno della ROI — assunzione valida per il troncamento assiale del FOV). Se $c_{i,r} < 0.5$, il valore viene impostato a NaN indipendentemente dal numero assoluto di voxel disponibili; i soggetti con più del 10% di ROI NaN vengono esclusi dall'analisi.
 
 > **Nota sulla scelta della media**: la media è lo stimatore standard nella letteratura SuStaIn (Young et al., 2018; Tan et al., 2022) e viene mantenuta per comparabilità. Come misura di robustezza può essere applicata una winsorizzazione preliminare (clipping dei valori oltre ±5 unità di WBM) prima dell'averaging.
 
-> **Nota sul FOV**: scanner dedicati al neuroimaging con FOV assiale ≥ 15 cm coprono in genere l'intero cervello incluso il cervelletto. Scanner più datati o protocolli con FOV ridotto possono escludere i lobuli cerebellari inferiori. I soggetti con > 10% di ROI mancanti vengono esclusi dall'analisi.
+> **Nota sul FOV**: scanner dedicati al neuroimaging con FOV assiale ≥ 15 cm coprono in genere l'intero cervello incluso il cervelletto. Scanner più datati o protocolli con FOV ridotto possono escludere i lobuli cerebellari inferiori. La verifica del $c_{i,r}$ per le ROI cerebellari è parte del controllo qualità pre-estrazione.
 
 ### 5.4 Set di ROI selezionate
 
@@ -64,20 +95,43 @@ Il set comprende **24 ROI** (12 coppie bilaterali), selezionate sulla base della
 
 Le regioni bilaterali vengono estratte separatamente (sinistra e destra) per consentire a SuStaIn di rilevare eventuali asimmetrie di progressione.
 
-| Dominio | Nome AAL3 | Codice | Vol. (voxel) | Giustificazione |
-|---|---|---|---|---|
-| **Motorio primario** | Precentral_L / _R | 1 / 2 | 3526 / 3381 | Coinvolgimento UMN universale; ipometabolismo precoce in tutti i sottotipi |
-| **Motorio supplementare** | Supp_Motor_Area_L / _R | 15 / 16 | 2147 / 2371 | Stadio TDP-43 I–II; presente in forme bulbari e spinali |
-| **Frontale superiore mediale** | Frontal_Sup_Medial_L / _R | 19 / 20 | 2992 / 2134 | Componente cognitivo-motoria; pattern C9orf72 |
-| **Prefrontale dorsolaterale** | Frontal_Mid_2_L / _R | 5 / 6 | 4507 / 4860 | Cluster FT (Tan et al.); compromissione esecutiva; C9orf72 |
-| **Orbitofrontale mediale** | Frontal_Med_Orb_L / _R | 21 / 22 | 719 / 856 | ALS-FTD comportamentale; correlato di disinibizione |
-| **Cingolato anteriore (pregenuale)** | ACC_pre_L / _R | 153 / 154 | 627 / 648 | Cluster CPT (Tan et al.); marcatore cognitivo-comportamentale |
-| **Cingolato posteriore** | Cingulate_Post_L / _R | 39 / 40 | 463 / 335 | Default mode network; deterioramento cognitivo in stadio avanzato |
-| **Temporale superiore** | Temporal_Sup_L / _R | 85 / 86 | 2296 / 3141 | ALS-FTD variante semantica/logopenica; C9orf72 |
-| **Temporale medio** | Temporal_Mid_L / _R | 89 / 90 | 4942 / 4409 | Compromissione linguistica; memoria episodica |
-| **Parietale superiore** | Parietal_Sup_L / _R | 63 / 64 | 2065 / 2222 | Cluster CPT; correlato visuospaziale ed esecutivo |
-| **Cervelletto lobulo IV–V** | Cerebelum_4_5_L / _R | 101 / 102 | 1125 / 861 | Cluster CPT; C9orf72; forme atassiche |
-| **Cervelletto lobulo VIII** | Cerebelum_8_L / _R | 107 / 108 | 1887 / 2308 | Pattern C9orf72; progressione tardiva |
+La colonna **Stato** indica la qualità dimensionale della ROI rispetto alla soglia operativa di $n_r \geq 400$ voxel per emisfero, tenendo conto dell'effetto dello smoothing 10 mm FWHM (§5.3.3):
+
+| Dominio | Nome AAL3 | Codice | Vol. (voxel) | Stato | Giustificazione |
+|---|---|---|---|---|---|
+| **Motorio primario** | Precentral_L / _R | 1 / 2 | 3526 / 3381 | ✅ | Coinvolgimento UMN universale; ipometabolismo precoce in tutti i sottotipi |
+| **Motorio supplementare** | Supp_Motor_Area_L / _R | 15 / 16 | 2147 / 2371 | ✅ | Stadio TDP-43 I–II; presente in forme bulbari e spinali |
+| **Frontale superiore mediale** | Frontal_Sup_Medial_L / _R | 19 / 20 | 2992 / 2134 | ✅ | Componente cognitivo-motoria; pattern C9orf72 |
+| **Prefrontale dorsolaterale** | Frontal_Mid_2_L / _R | 5 / 6 | 4507 / 4860 | ✅ | Cluster FT (Tan et al.); compromissione esecutiva; C9orf72 |
+| **Orbitofrontale mediale** | Frontal_Med_Orb_L / _R | 21 / 22 | 719 / 856 | ⚠️ | ALS-FTD comportamentale; correlato di disinibizione — dimensione ridotta, inclusa per rilevanza clinica (v. nota) |
+| **Cingolato anteriore (pregenuale)** | ACC_pre_L / _R | 153 / 154 | 627 / 648 | ⚠️ | Cluster CPT (Tan et al.); marcatore cognitivo-comportamentale — dimensione ridotta, inclusa per rilevanza clinica (v. nota) |
+| **Cingolato posteriore** | Cingulate_Post_L / _R | 39 / 40 | 463 / **335** | ⚠️ / ❌ | Default mode network; deterioramento cognitivo in stadio avanzato — _R sotto soglia critica (v. nota) |
+| **Temporale superiore** | Temporal_Sup_L / _R | 85 / 86 | 2296 / 3141 | ✅ | ALS-FTD variante semantica/logopenica; C9orf72 |
+| **Temporale medio** | Temporal_Mid_L / _R | 89 / 90 | 4942 / 4409 | ✅ | Compromissione linguistica; memoria episodica |
+| **Parietale superiore** | Parietal_Sup_L / _R | 63 / 64 | 2065 / 2222 | ✅ | Cluster CPT; correlato visuospaziale ed esecutivo |
+| **Cervelletto lobulo IV–V** | Cerebelum_4_5_L / _R | 101 / 102 | 1125 / 861 | ✅ | Cluster CPT; C9orf72; forme atassiche |
+| **Cervelletto lobulo VIII** | Cerebelum_8_L / _R | 107 / 108 | 1887 / 2308 | ✅ | Pattern C9orf72; progressione tardiva |
+
+**Legenda stato**: ✅ dimensione adeguata ($n_r \geq 400$) · ⚠️ borderline (400–700 voxel, inclusa con caveats) · ❌ sotto soglia critica ($n_r < 400$, richiede decisione esplicita)
+
+---
+
+> #### Nota — ROI con dimensioni ridotte
+>
+> Quattro ROI presentano volumi inferiori alla soglia operativa e richiedono attenzione specifica:
+>
+> **`Frontal_Med_Orb_L/R`** (719 / 856 voxel): entrambe le regioni sono al di sopra della soglia critica ma nella fascia borderline. Il segnale dopo smoothing 10 mm è inevitabilmente influenzato dalle strutture vicine (OFC laterale, striato ventrale). Per questa coppia si adottano le seguenti cautele: (a) verifica della stabilità del biomarker nella run esplorativa SuStaIn; (b) se la regione non contribuisce in modo consistente alla sequenza di eventi, considerare la fusione con `Frontal_Med_Orb` di AAL3 o l'esclusione.
+>
+> **`ACC_pre_L/R`** (627 / 648 voxel): componenti del cingolato anteriore specifiche di AAL3 (codici 153–154). Il volume ridotto è intrinseco alla suddivisione anatomica fine di AAL3. Clinicamente indispensabili per distinguere il pattern cognitivo-comportamentale (cluster CPT di Tan et al.) dal pattern motorio puro. Opzione alternativa: fondere pregenuale e sopracallosale (`ACC_pre + ACC_sup`, codici 153/157 e 154/158) per una ROI ACC dorsale più ampia (~1400 voxel per emisfero), a scapito della granularità anatomica.
+>
+> **`Cingulate_Post_R`** (335 voxel): **sotto soglia critica**. Con smoothing 10 mm, il numero di campioni indipendenti effettivi è stimato in $n_{\text{eff}} \approx 35\text{–}70$, insufficiente per uno stimatore ROI stabile. Tre opzioni:
+> 1. **Esclusione di `_R`**: mantenere solo `Cingulate_Post_L` (463 voxel, borderline ma accettabile), perdendo la simmetria bilaterale.
+> 2. **Fusione bilaterale**: utilizzare una singola ROI `Cingulate_Post` che include entrambi gli emisferi (totale ≈ 798 voxel), riducendo $R$ di 1.
+> 3. **Sostituzione**: sostituire entrambe le componenti con il **cingolato posteriore di AAL1** (codici 35/36 in AAL1, ma vuoti in AAL3), oppure con `Cingulate_Mid_Post_L/R` se disponibile nella versione atlante in uso.
+>
+> La decisione va presa prima dell'analisi esplorativa SuStaIn e documentata nei metodi.
+
+---
 
 **Regioni escluse**: il **talamo** (nuclei AAL3 con 10–265 voxel ciascuno) è troppo piccolo per produrre un biomarker stabile dopo smoothing 10 mm. La corteccia **occipitale** è tipicamente risparmiata nell'ALS. Il complesso **ippocampale** è rilevante nell'ALS-FTD ma si sovrappone ai pattern AD. **Putamen e caudato** sono considerati per un'analisi di sottogruppo nelle varianti parkinsoniane.
 
@@ -136,8 +190,6 @@ R = len(roi_table)
 
 # =====================================================================
 # FUNZIONE DI ESTRAZIONE (riutilizzata per ctrl e ALS)
-# Input: directory con file i*_w.nii (o equivalente per ALS)
-# pattern: pattern glob per trovare i file
 # =====================================================================
 def extract_roi_matrix(vol_dir, pattern, subj_id_fn):
     """
@@ -160,11 +212,16 @@ def extract_roi_matrix(vol_dir, pattern, subj_id_fn):
         subj_ids.append(subj_id_fn(fpath.stem))
 
         for r, (code, name) in enumerate(roi_table):
-            mask_roi = (aal_vol == code)
-            voxels   = vol[mask_roi & np.isfinite(vol)]
-            if len(voxels) > 0:
+            mask_roi  = (aal_vol == code)
+            n_atlas   = np.sum(mask_roi)          # voxel totali della ROI nell'atlante
+            fov_mask  = np.isfinite(vol)
+            n_overlap = np.sum(mask_roi & fov_mask)
+            coverage  = n_overlap / n_atlas if n_atlas > 0 else 0.0
+
+            if coverage >= 0.5:
+                voxels = vol[mask_roi & fov_mask]
                 matrix[i, r] = np.mean(voxels)
-            # altrimenti rimane NaN (FOV incompleto)
+            # altrimenti rimane NaN (copertura FOV < 50%)
 
         if (i + 1) % 20 == 0 or (i + 1) == N:
             n_nan = np.sum(np.isnan(matrix[i]))
@@ -185,7 +242,6 @@ def extract_roi_matrix(vol_dir, pattern, subj_id_fn):
 
 # =====================================================================
 # ESTRAZIONE CONTROLLI ADNI
-# Pattern: i<SUBJECT_ID>_w.nii
 # =====================================================================
 df_ctrl = extract_roi_matrix(
     uptake_dir_ctrl,
@@ -195,7 +251,6 @@ df_ctrl = extract_roi_matrix(
 
 # =====================================================================
 # ESTRAZIONE PAZIENTI ALS
-# Adattare pattern e subj_id_fn alla nomenclatura del proprio dataset
 # =====================================================================
 df_als = extract_roi_matrix(
     uptake_dir_als,
@@ -205,8 +260,6 @@ df_als = extract_roi_matrix(
 
 # =====================================================================
 # AGGIUNGI COLONNE DEMOGRAFICHE (necessarie per ComBat)
-# Le colonne 'age', 'sex', 'scanner_id', 'group' vanno caricate
-# da un CSV demografico separato e unite per SubjectID
 # =====================================================================
 # df_demo_ctrl = pd.read_csv('demographics_adni.csv')
 # df_ctrl = df_ctrl.merge(df_demo_ctrl[['SubjectID','age','sex','scanner_id']], on='SubjectID')
