@@ -67,7 +67,11 @@ Il valore ROI del soggetto $i$ per la regione $r$ è la media aritmetica dell'up
 
 $$\bar{u}_{i,r} = \frac{1}{|\mathcal{M}_r \cap \mathcal{M}_{\text{FOV},i}|} \sum_{\mathbf{v} \in \mathcal{M}_r \cap \mathcal{M}_{\text{FOV},i}} F_i(\mathbf{v})$$
 
-Se $|\mathcal{M}_r \cap \mathcal{M}_{\text{FOV},i}| = 0$, la ROI è non definita e il valore viene impostato a NaN (copertura FOV nulla).
+Se
+
+$|\mathcal{M}_r \cap \mathcal{M}_{\text{FOV},i}| = 0$,
+
+la ROI è non definita e il valore viene impostato a NaN (copertura FOV nulla).
 
 #### 5.3.2 Proprietà statistiche dello stimatore
 
@@ -75,7 +79,13 @@ La media è uno stimatore consistente e non distorto del metabolismo medio della
 
 $$\mathrm{Var}(\bar{u}_{i,r}) = \frac{\sigma_{\text{eff}}^2}{n_r}$$
 
-dove $n_r = |\mathcal{M}_r \cap \mathcal{M}_{\text{FOV},i}|$ e $\sigma_{\text{eff}}^2$ è la varianza efficace, aumentata rispetto a $\sigma_\text{sig}^2$ per effetto della correlazione spaziale tra voxel vicini.
+dove
+
+$n_r = |\mathcal{M}_r \cap \mathcal{M}_{\text{FOV},i}|$ e 
+
+$\sigma_{\text{eff}}^2$ 
+
+è la varianza efficace, aumentata rispetto a $\sigma_\text{sig}^2$ per effetto della correlazione spaziale tra voxel vicini.
 
 #### 5.3.3 Effetto dello smoothing sulla correlazione spaziale
 
